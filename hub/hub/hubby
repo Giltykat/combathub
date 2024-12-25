@@ -1,0 +1,664 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "Beta Cheese",
+    Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+    LoadingTitle = "Booting Scripts",
+    LoadingSubtitle = "by GiltyKat",
+    Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+ 
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false, -- Prevents Rayfield from warning when the script has a version mismatch with the interface
+ 
+    ConfigurationSaving = {
+       Enabled = true,
+       FolderName = nil, -- Create a custom folder for your hub/game
+       FileName = "Min Hub"
+    },
+ 
+    Discord = {
+       Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+       Invite = "noinvitelink", -- The Discord invite code, do not include discord.gg/. E.g. discord.gg/ABCD would be ABCD
+       RememberJoins = true -- Set this to false to make them join the discord every time they load it up
+    },
+ 
+    KeySystem = true, -- Set this to true to use our key system
+    KeySettings = {
+       Title = "Security Init",
+       Subtitle = "Key System",
+       Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
+       FileName = "Key", -- It is recommended to use something unique as other scripts using Rayfield may overwrite your key file
+       SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+       GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+       Key = {"1234"} -- List of keys that will be accepted by the system, can be RAW file links (pastebin, github etc) or simple strings ("hello","key22")
+    }
+ })
+
+ local vis = Window:CreateTab("Visuals", 4483362458) -- Title, Image
+ local aim = Window:CreateTab("Aim", 4483362458) -- Title, Image
+ local con = Window:CreateTab("Config", 4483362458) -- Title, Image
+
+ local Toggle = vis:CreateToggle({
+    Name = "Skeleton Esp",
+    CurrentValue = false,
+    Flag = "Toggle1", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Universal Bones ESP with Proper Rotation and Length
+-- This script ensures ESP lines match the exact rotation and length of limbs.
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Variables
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local DrawingLines = {}
+
+-- Function to create a line
+local function createLine()
+    local line = Drawing.new("Line")
+    line.Visible = false
+    line.Color = Color3.new(1, 0, 0) -- Red
+    line.Thickness = 2
+    return line
+end
+
+-- Function to update lines for a single player
+local function updatePlayerESP(player)
+    if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
+        local character = player.Character
+        local bodyParts = {
+            Head = character:FindFirstChild("Head"),
+            Torso = character:FindFirstChild("UpperTorso") or character:FindFirstChild("Torso"),
+            LeftArm = character:FindFirstChild("LeftUpperArm") or character:FindFirstChild("Left Arm"),
+            RightArm = character:FindFirstChild("RightUpperArm") or character:FindFirstChild("Right Arm"),
+            LeftLeg = character:FindFirstChild("LeftUpperLeg") or character:FindFirstChild("Left Leg"),
+            RightLeg = character:FindFirstChild("RightUpperLeg") or character:FindFirstChild("Right Leg"),
+        }
+
+        local bones = {
+            {bodyParts.Head, bodyParts.Torso},
+            {bodyParts.Torso, bodyParts.LeftArm},
+            {bodyParts.Torso, bodyParts.RightArm},
+            {bodyParts.Torso, bodyParts.LeftLeg},
+            {bodyParts.Torso, bodyParts.RightLeg},
+        }
+
+        for index, bone in ipairs(bones) do
+            local part1, part2 = bone[1], bone[2]
+            local line = DrawingLines[player.Name .. index] or createLine()
+            DrawingLines[player.Name .. index] = line
+
+            if part1 and part2 then
+                -- Calculate the midpoint of the limb for more accuracy
+                local part1Pos, part1Visible = Camera:WorldToViewportPoint(part1.Position)
+                local part2Pos, part2Visible = Camera:WorldToViewportPoint(part2.Position)
+
+                if part1Visible and part2Visible then
+                    line.Visible = true
+                    line.From = Vector2.new(part1Pos.X, part1Pos.Y)
+                    line.To = Vector2.new(part2Pos.X, part2Pos.Y)
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+    else
+        -- Hide lines if player is invalid
+        for index = 1, 5 do
+            local line = DrawingLines[player.Name .. index]
+            if line then
+                line.Visible = false
+            end
+        end
+    end
+end
+
+-- Function to update ESP for all players
+local function updateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        updatePlayerESP(player)
+    end
+end
+
+-- Clean up lines when player leaves
+Players.PlayerRemoving:Connect(function(player)
+    for index = 1, 5 do
+        local line = DrawingLines[player.Name .. index]
+        if line then
+            line:Remove()
+            DrawingLines[player.Name .. index] = nil
+        end
+    end
+end)
+
+-- Run the ESP update
+RunService.RenderStepped:Connect(updateESP)
+
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Snaplines",
+    CurrentValue = false,
+    Flag = "Toggle2", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Universal Snapline ESP
+-- Draws a line from the bottom-middle of the screen to each player dynamically.
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Variables
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local DrawingLines = {}
+
+-- Function to create a line
+local function createLine()
+    local line = Drawing.new("Line")
+    line.Visible = false
+    line.Color = Color3.new(0, 1, 0) -- Green
+    line.Thickness = 2
+    return line
+end
+
+-- Function to update Snapline for a player
+local function updatePlayerSnapline(player)
+    if player == LocalPlayer or not player.Character or not player.Character:FindFirstChild("Humanoid") then
+        return
+    end
+
+    local character = player.Character
+    local humanoid = character:FindFirstChild("Humanoid")
+
+    -- Skip players with no health
+    if humanoid.Health <= 0 then
+        return
+    end
+
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then
+        return
+    end
+
+    local line = DrawingLines[player.Name] or createLine()
+    DrawingLines[player.Name] = line
+
+    -- Get the player's position on the screen
+    local rootPosition, visible = Camera:WorldToViewportPoint(rootPart.Position)
+
+    -- Get the bottom middle of the screen
+    local screenSize = Camera.ViewportSize
+    local bottomMiddle = Vector2.new(screenSize.X / 2, screenSize.Y)
+
+    if visible then
+        line.Visible = true
+        line.From = bottomMiddle
+        line.To = Vector2.new(rootPosition.X, rootPosition.Y)
+    else
+        line.Visible = false
+    end
+end
+
+-- Function to update Snaplines for all players
+local function updateSnaplines()
+    for _, player in ipairs(Players:GetPlayers()) do
+        updatePlayerSnapline(player)
+    end
+end
+
+-- Clean up lines when a player leaves
+Players.PlayerRemoving:Connect(function(player)
+    local line = DrawingLines[player.Name]
+    if line then
+        line:Remove()
+        DrawingLines[player.Name] = nil
+    end
+end)
+
+-- Render update
+RunService.RenderStepped:Connect(updateSnaplines)
+
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Radar",
+    CurrentValue = false,
+    Flag = "Toggle3", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Universal Radar ESP
+-- Creates a top-down radar displaying player positions relative to the local player.
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Variables
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local RadarRadius = 100 -- Radius of the radar in pixels
+local RadarCenter = Vector2.new(200, 200) -- Center of the radar on the screen
+local RadarScale = 1 / 10 -- Scale for converting world distances to radar distances
+local RadarDots = {}
+
+-- Function to create a radar dot
+local function createDot()
+    local dot = Drawing.new("Circle")
+    dot.Visible = false
+    dot.Color = Color3.new(1, 0, 0) -- Red
+    dot.Radius = 3
+    dot.Filled = true
+    return dot
+end
+
+-- Function to update radar for a player
+local function updatePlayerRadar(player)
+    if player == LocalPlayer or not player.Character or not player.Character:FindFirstChild("Humanoid") then
+        return
+    end
+
+    local character = player.Character
+    local humanoid = character:FindFirstChild("Humanoid")
+
+    -- Skip players with no health
+    if humanoid.Health <= 0 then
+        return
+    end
+
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then
+        return
+    end
+
+    local dot = RadarDots[player.Name] or createDot()
+    RadarDots[player.Name] = dot
+
+    -- Calculate the position of the player relative to the local player
+    local localRootPart = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not localRootPart then
+        dot.Visible = false
+        return
+    end
+
+    local relativePosition = rootPart.Position - localRootPart.Position
+    local radarPosition = Vector2.new(relativePosition.X, relativePosition.Z) * RadarScale
+
+    -- Check if the player is within the radar radius
+    if radarPosition.Magnitude <= RadarRadius then
+        dot.Visible = true
+        dot.Position = RadarCenter + radarPosition
+    else
+        dot.Visible = false
+    end
+end
+
+-- Function to update radar for all players
+local function updateRadar()
+    for _, player in ipairs(Players:GetPlayers()) do
+        updatePlayerRadar(player)
+    end
+end
+
+-- Clean up dots when a player leaves
+Players.PlayerRemoving:Connect(function(player)
+    local dot = RadarDots[player.Name]
+    if dot then
+        dot:Remove()
+        RadarDots[player.Name] = nil
+    end
+end)
+
+-- Radar Border
+local radarBorder = Drawing.new("Circle")
+radarBorder.Visible = true
+radarBorder.Color = Color3.new(0, 1, 0) -- Green
+radarBorder.Thickness = 2
+radarBorder.Filled = false
+radarBorder.Position = RadarCenter
+radarBorder.Radius = RadarRadius
+
+-- Render update
+RunService.RenderStepped:Connect(function()
+    updateRadar()
+end)
+
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Tool Esp",
+    CurrentValue = false,
+    Flag = "Toggle4", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Tool ESP
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local ToolESPTexts = {}
+
+local function createText()
+    local text = Drawing.new("Text")
+    text.Visible = false
+    text.Size = 20
+    text.Color = Color3.new(1, 1, 0) -- Yellow
+    text.Center = true
+    return text
+end
+
+local function updateToolESP(player)
+    if player == Players.LocalPlayer or not player.Character then
+        return
+    end
+
+    local character = player.Character
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    local tool = player:FindFirstChildOfClass("Backpack") or character:FindFirstChildOfClass("Tool")
+
+    local text = ToolESPTexts[player.Name] or createText()
+    ToolESPTexts[player.Name] = text
+
+    if humanoidRootPart and tool then
+        local screenPosition, visible = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+        if visible then
+            text.Visible = true
+            text.Text = tool.Name
+            text.Position = Vector2.new(screenPosition.X, screenPosition.Y - 20)
+        else
+            text.Visible = false
+        end
+    else
+        text.Visible = false
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        updateToolESP(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if ToolESPTexts[player.Name] then
+        ToolESPTexts[player.Name]:Remove()
+        ToolESPTexts[player.Name] = nil
+    end
+end)
+
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Name esp",
+    CurrentValue = false,
+    Flag = "Toggle5", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Name ESP
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local NameESPTexts = {}
+
+local function createText()
+    local text = Drawing.new("Text")
+    text.Visible = false
+    text.Size = 20
+    text.Color = Color3.new(1, 1, 1) -- White
+    text.Center = true
+    return text
+end
+
+local function updateNameESP(player)
+    if player == Players.LocalPlayer or not player.Character then
+        return
+    end
+
+    local character = player.Character
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+
+    local text = NameESPTexts[player.Name] or createText()
+    NameESPTexts[player.Name] = text
+
+    if humanoidRootPart then
+        local screenPosition, visible = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+        if visible then
+            text.Visible = true
+            text.Text = player.Name
+            text.Position = Vector2.new(screenPosition.X, screenPosition.Y - 40)
+        else
+            text.Visible = false
+        end
+    else
+        text.Visible = false
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        updateNameESP(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if NameESPTexts[player.Name] then
+        NameESPTexts[player.Name]:Remove()
+        NameESPTexts[player.Name] = nil
+    end
+end)
+
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Health Esp",
+    CurrentValue = false,
+    Flag = "Toggle6", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Health ESP
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+local HealthESPTexts = {}
+
+local function createText()
+    local text = Drawing.new("Text")
+    text.Visible = false
+    text.Size = 20
+    text.Color = Color3.new(0, 1, 0) -- Green
+    text.Center = true
+    return text
+end
+
+local function updateHealthESP(player)
+    if player == Players.LocalPlayer or not player.Character then
+        return
+    end
+
+    local character = player.Character
+    local humanoid = character:FindFirstChild("Humanoid")
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+
+    local text = HealthESPTexts[player.Name] or createText()
+    HealthESPTexts[player.Name] = text
+
+    if humanoid and humanoidRootPart then
+        local screenPosition, visible = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+        if visible then
+            text.Visible = true
+            text.Text = tostring(math.floor(humanoid.Health)) .. " HP"
+            text.Position = Vector2.new(screenPosition.X, screenPosition.Y - 60)
+        else
+            text.Visible = false
+        end
+    else
+        text.Visible = false
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        updateHealthESP(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if HealthESPTexts[player.Name] then
+        HealthESPTexts[player.Name]:Remove()
+        HealthESPTexts[player.Name] = nil
+    end
+end)
+
+    end,
+ })
+
+ local Toggle = aim:CreateToggle({
+    Name = "Aimbot",
+    CurrentValue = false,
+    Flag = "Toggle7", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local UserInputService = game:GetService("UserInputService")
+        local Camera = workspace.CurrentCamera
+        
+        -- Settings
+        local AimbotSettings = {
+            FOV = 100, -- Size of the Field of View
+            Smoothness = 1, -- Smoothness factor (0 is instant, higher is slower)
+            AimKey = Enum.UserInputType.MouseButton2, -- Right Mouse Button to aim
+            FOVColor = Color3.new(1, 0, 0), -- Red
+            FOVTransparency = 0.5, -- Transparency of the FOV circle
+            FOVVisible = 1, -- Set to 1 to draw the FOV, 0 to hide it
+        }
+        
+        -- Variables
+        local FOVCircle = Drawing.new("Circle")
+        local AimingAt = nil
+        local IsAiming = false
+        
+        -- Initialize the FOV circle
+        FOVCircle.Visible = (AimbotSettings.FOVVisible == 1)
+        FOVCircle.Color = AimbotSettings.FOVColor
+        FOVCircle.Thickness = 2
+        FOVCircle.Transparency = AimbotSettings.FOVTransparency
+        FOVCircle.Radius = AimbotSettings.FOV
+        FOVCircle.Filled = false
+        
+        -- Function to find the closest player within the FOV
+        local function getClosestPlayer()
+            local closestPlayer = nil
+            local shortestDistance = AimbotSettings.FOV
+        
+            for _, player in ipairs(Players:GetPlayers()) do
+                if player ~= Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local rootPart = player.Character.HumanoidRootPart
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+        
+                    if onScreen then
+                        local mousePos = UserInputService:GetMouseLocation()
+                        local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+        
+                        if distance < shortestDistance then
+                            closestPlayer = player
+                            shortestDistance = distance
+                        end
+                    end
+                end
+            end
+        
+            return closestPlayer
+        end
+        
+        -- Function to smoothly aim at a target
+        local function aimAt(target)
+            if not target or not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
+                return
+            end
+        
+            local rootPart = target.Character.HumanoidRootPart
+            local targetPos = Camera:WorldToViewportPoint(rootPart.Position)
+            local mousePos = UserInputService:GetMouseLocation()
+        
+            -- Calculate smooth aim movement
+            local deltaX = (targetPos.X - mousePos.X) * AimbotSettings.Smoothness
+            local deltaY = (targetPos.Y - mousePos.Y) * AimbotSettings.Smoothness
+        
+            -- Move the mouse smoothly
+            mousemoverel(deltaX, deltaY)
+        end
+        
+        -- Update FOV circle position
+        RunService.RenderStepped:Connect(function()
+            local mousePos = UserInputService:GetMouseLocation()
+            FOVCircle.Position = mousePos
+        end)
+        
+        -- Main aimbot loop
+        RunService.RenderStepped:Connect(function()
+            if IsAiming then
+                if not AimingAt or not AimingAt.Character or not AimingAt.Character:FindFirstChild("HumanoidRootPart") then
+                    AimingAt = getClosestPlayer()
+                end
+        
+                if AimingAt then
+                    aimAt(AimingAt)
+                end
+            else
+                AimingAt = nil
+            end
+        end)
+        
+        -- Listen for aim key
+        UserInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == AimbotSettings.AimKey then
+                IsAiming = true
+            end
+        end)
+        
+        UserInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == AimbotSettings.AimKey then
+                IsAiming = false
+            end
+        end)
+        
+        -- Toggle FOV visibility based on settings
+        FOVCircle.Visible = (AimbotSettings.FOVVisible == 1)
+        
+    end,
+ })
+
+ 
+
+
+ -- Slider for FOV
+ local Slider = con:CreateSlider({
+    Name = "Fov Radius",
+    Range = {0, 5},
+    Increment = 0.2,
+    Suffix = "degrees",
+    CurrentValue = 1,
+    Flag = "Slider1", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(V)
+        AimbotSettings.FOV = V 
+        FOVCircleR = AimbotSettings.FOV  -- Update the circle's radius
+    end,
+ })
+
+-- Slider for Smoothness
+local SmoothnessSlider = Tab:CreateSlider({
+    Name = "Aimbot Smoothness",
+    Range = {0, 1},  -- Smoothness range from 0 (instant) to 1 (slower)
+    Increment = 0.01,  -- Small increment to adjust smoothness
+    Suffix = "Smoothness",  -- Label for the value
+    CurrentValue = AimbotSettings.Smoothness,  -- Default value from aimbot settings
+    Flag = "SmoothnessSlider",  -- Identifier for saving configuration
+    Callback = function(Value)
+        -- Update the smoothness setting based on slider value
+        AimbotSettings.Smoothness = Value
+    end,
+})
