@@ -1,18 +1,31 @@
+game:GetService("Players").LocalPlayer.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.InProgress then
+        -- Show a message before teleporting
+        messagebox("Rejoining!", "Combathub", 0)
+
+        task.wait(4) -- Wait 4 seconds before proceeding
+
+        -- Execute the script after the delay
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Giltykat/combathub-public-nosource/refs/heads/main/hub.lua"))()
+    end
+end)
+
+
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "Beta Cheese",
-    Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+    Name = "Combat Hub",
+    Icon = skull, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
     LoadingTitle = "Booting Scripts",
     LoadingSubtitle = "by GiltyKat",
-    Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+    Theme = "DarkBlue", -- Check https://docs.sirius.menu/rayfield/configuration/themes
  
-    DisableRayfieldPrompts = false,
+    DisableRayfieldPrompts = true,
     DisableBuildWarnings = false, -- Prevents Rayfield from warning when the script has a version mismatch with the interface
  
     ConfigurationSaving = {
        Enabled = true,
-       FolderName = nil, -- Create a custom folder for your hub/game
+       FolderName = Minhub, -- Create a custom folder for your hub/game
        FileName = "Min Hub"
     },
  
@@ -34,9 +47,11 @@ local Window = Rayfield:CreateWindow({
     }
  })
 
- local vis = Window:CreateTab("Visuals", 4483362458) -- Title, Image
- local aim = Window:CreateTab("Aim", 4483362458) -- Title, Image
- local con = Window:CreateTab("Config", 4483362458) -- Title, Image
+ local vis = Window:CreateTab("Visuals", "view") -- Title, Image
+ local aim = Window:CreateTab("Aim", "crosshair") -- Title, Image
+ local con = Window:CreateTab("Config", "view") -- Title, Image
+ local mis = Window:CreateTab("Misc", "chevron-last") -- Title, Image
+ local wor = Window:CreateTab("World", "earth") -- Title, Image
 
  local Toggle = vis:CreateToggle({
     Name = "Skeleton Esp",
@@ -162,7 +177,7 @@ local DrawingLines = {}
 local function createLine()
     local line = Drawing.new("Line")
     line.Visible = false
-    line.Color = Color3.new(0, 1, 0) -- Green
+    line.Color = SnaplinesCconfig -- Green
     line.Thickness = 2
     return line
 end
@@ -459,62 +474,119 @@ end)
     CurrentValue = false,
     Flag = "Toggle6", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
--- Health ESP
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-local HealthESPTexts = {}
-
-local function createText()
-    local text = Drawing.new("Text")
-    text.Visible = false
-    text.Size = 20
-    text.Color = Color3.new(0, 1, 0) -- Green
-    text.Center = true
-    return text
-end
-
-local function updateHealthESP(player)
-    if player == Players.LocalPlayer or not player.Character then
-        return
-    end
-
-    local character = player.Character
-    local humanoid = character:FindFirstChild("Humanoid")
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-
-    local text = HealthESPTexts[player.Name] or createText()
-    HealthESPTexts[player.Name] = text
-
-    if humanoid and humanoidRootPart then
-        local screenPosition, visible = Camera:WorldToViewportPoint(humanoidRootPart.Position)
-        if visible then
-            text.Visible = true
-            text.Text = tostring(math.floor(humanoid.Health)) .. " HP"
-            text.Position = Vector2.new(screenPosition.X, screenPosition.Y - 60)
-        else
-            text.Visible = false
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local Camera = workspace.CurrentCamera
+        
+        -- Configuration options for the Health ESP
+        local HealthESPConfig = {
+            ShowText = false,         -- Set to true to display health text (e.g., "100 HP")
+            ShowBar = true,           -- Set to true to display the health bar
+            BarWidth = 50,            -- Width of the health bar
+            BarHeight = 5,            -- Height of the health bar
+            BarColor = HealthEspColorCon,          -- Color of the health fill (green by default)
+            BarBackgroundColor = Color3.new(0, 0, 0),  -- Background color of the health bar
+        }
+        
+        -- Container for ESP elements for each player
+        local HealthESPElements = {}
+        
+        -- Creates the ESP drawings for a player based on config options
+        local function createHealthESP(player)
+            local elements = {}
+            if HealthESPConfig.ShowBar then
+                elements.BarBackground = Drawing.new("Square")
+                elements.BarBackground.Visible = false
+                elements.BarBackground.Filled = true
+                elements.BarBackground.Color = HealthESPConfig.BarBackgroundColor
+                elements.BarBackground.Transparency = 0.5
+                elements.BarBackground.ZIndex = 1
+        
+                elements.BarFill = Drawing.new("Square")
+                elements.BarFill.Visible = false
+                elements.BarFill.Filled = true
+                elements.BarFill.Color = HealthESPConfig.BarColor
+                elements.BarFill.ZIndex = 2
+            end
+            if HealthESPConfig.ShowText then
+                elements.Text = Drawing.new("Text")
+                elements.Text.Visible = false
+                elements.Text.Size = 20
+                elements.Text.Color = HealthESPConfig.BarColor
+                elements.Text.Center = true
+                elements.Text.ZIndex = 3
+            end
+            return elements
         end
-    else
-        text.Visible = false
-    end
-end
-
-RunService.RenderStepped:Connect(function()
-    for _, player in ipairs(Players:GetPlayers()) do
-        updateHealthESP(player)
-    end
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-    if HealthESPTexts[player.Name] then
-        HealthESPTexts[player.Name]:Remove()
-        HealthESPTexts[player.Name] = nil
-    end
-end)
+        
+        -- Updates the ESP for a given player
+        local function updateHealthESP(player)
+            if player == Players.LocalPlayer or not player.Character then
+                return
+            end
+        
+            local character = player.Character
+            local humanoid = character:FindFirstChild("Humanoid")
+            local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+            if not humanoid or not humanoidRootPart then
+                return
+            end
+        
+            local screenPosition, visible = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+            local elements = HealthESPElements[player.Name] or createHealthESP(player)
+            HealthESPElements[player.Name] = elements
+        
+            if visible then
+                if HealthESPConfig.ShowBar then
+                    local barX = screenPosition.X - HealthESPConfig.BarWidth / 2
+                    local barY = screenPosition.Y - 60  -- Adjust vertical offset as needed
+                    elements.BarBackground.Visible = true
+                    elements.BarBackground.Position = Vector2.new(barX, barY)
+                    elements.BarBackground.Size = Vector2.new(HealthESPConfig.BarWidth, HealthESPConfig.BarHeight)
+                    
+                    local healthPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+                    elements.BarFill.Visible = true
+                    elements.BarFill.Position = Vector2.new(barX, barY)
+                    elements.BarFill.Size = Vector2.new(HealthESPConfig.BarWidth * healthPercent, HealthESPConfig.BarHeight)
+                end
+                
+                if HealthESPConfig.ShowText and elements.Text then
+                    elements.Text.Visible = true
+                    elements.Text.Text = tostring(math.floor(humanoid.Health)) .. " HP"
+                    elements.Text.Position = Vector2.new(screenPosition.X, screenPosition.Y - 70)
+                elseif elements.Text then
+                    elements.Text.Visible = false
+                end
+            else
+                if elements.BarBackground then elements.BarBackground.Visible = false end
+                if elements.BarFill then elements.BarFill.Visible = false end
+                if elements.Text then elements.Text.Visible = false end
+            end
+        end
+        
+        -- Update ESP every frame
+        RunService.RenderStepped:Connect(function()
+            for _, player in ipairs(Players:GetPlayers()) do
+                updateHealthESP(player)
+            end
+        end)
+        
+        -- Clean up ESP elements when a player leaves
+        Players.PlayerRemoving:Connect(function(player)
+            local elements = HealthESPElements[player.Name]
+            if elements then
+                for _, drawing in pairs(elements) do
+                    drawing:Remove()
+                end
+                HealthESPElements[player.Name] = nil
+            end
+        end)
+        
 
     end,
  })
+
+ local Paragraph = aim:CreateParagraph({Title = "!Important!", Content = "Set your configaration before you start the aimbot"})
 
  local Toggle = aim:CreateToggle({
     Name = "Aimbot",
@@ -528,12 +600,13 @@ end)
         
         -- Settings
         local AimbotSettings = {
-            FOV = 100, -- Size of the Field of View
-            Smoothness = 1, -- Smoothness factor (0 is instant, higher is slower)
-            AimKey = Enum.UserInputType.MouseButton2, -- Right Mouse Button to aim
-            FOVColor = Color3.new(1, 0, 0), -- Red
+            FOV = editfov, -- Size of the Field of View
+            Smoothness = smoothness, -- Smoothness factor (0 is instant, higher is slower)
+            AimKey = AimkeyCon , -- Mouse Button to aim
+            FOVColor = FOVCconfig, -- Red
             FOVTransparency = 0.5, -- Transparency of the FOV circle
-            FOVVisible = 1, -- Set to 1 to draw the FOV, 0 to hide it
+            FOVVisible = FovIsVisible, -- Set to 1 to draw the FOV, 0 to hide it
+            TeamCheck = AIMTEAMCHECK, -- Set to true to enable universal team check, false to disable
         }
         
         -- Variables
@@ -549,23 +622,28 @@ end)
         FOVCircle.Radius = AimbotSettings.FOV
         FOVCircle.Filled = false
         
-        -- Function to find the closest player within the FOV
+        -- Function to find the closest player within the FOV, with an optional team check
         local function getClosestPlayer()
             local closestPlayer = nil
             local shortestDistance = AimbotSettings.FOV
         
             for _, player in ipairs(Players:GetPlayers()) do
-                if player ~= Players.LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                    local rootPart = player.Character.HumanoidRootPart
-                    local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+                if player ~= Players.LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+                    -- If team check is enabled, ignore players on the same team
+                    if AimbotSettings.TeamCheck and player.Team and Players.LocalPlayer.Team and player.Team == Players.LocalPlayer.Team then
+                        -- Same team, skip this player
+                    else
+                        local head = player.Character.Head
+                        local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
         
-                    if onScreen then
-                        local mousePos = UserInputService:GetMouseLocation()
-                        local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                        if onScreen then
+                            local mousePos = UserInputService:GetMouseLocation()
+                            local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
         
-                        if distance < shortestDistance then
-                            closestPlayer = player
-                            shortestDistance = distance
+                            if distance < shortestDistance then
+                                closestPlayer = player
+                                shortestDistance = distance
+                            end
                         end
                     end
                 end
@@ -574,14 +652,14 @@ end)
             return closestPlayer
         end
         
-        -- Function to smoothly aim at a target
+        -- Function to smoothly aim at a target's head
         local function aimAt(target)
-            if not target or not target.Character or not target.Character:FindFirstChild("HumanoidRootPart") then
+            if not target or not target.Character or not target.Character:FindFirstChild("Head") then
                 return
             end
         
-            local rootPart = target.Character.HumanoidRootPart
-            local targetPos = Camera:WorldToViewportPoint(rootPart.Position)
+            local head = target.Character.Head
+            local targetPos = Camera:WorldToViewportPoint(head.Position)
             local mousePos = UserInputService:GetMouseLocation()
         
             -- Calculate smooth aim movement
@@ -596,12 +674,17 @@ end)
         RunService.RenderStepped:Connect(function()
             local mousePos = UserInputService:GetMouseLocation()
             FOVCircle.Position = mousePos
+            
+            -- Update FOV circle radius based on the FOV setting
+            if FOVCircle.Radius ~= AimbotSettings.FOV then
+                FOVCircle.Radius = AimbotSettings.FOV
+            end
         end)
         
         -- Main aimbot loop
         RunService.RenderStepped:Connect(function()
             if IsAiming then
-                if not AimingAt or not AimingAt.Character or not AimingAt.Character:FindFirstChild("HumanoidRootPart") then
+                if not AimingAt or not AimingAt.Character or not AimingAt.Character:FindFirstChild("Head") then
                     AimingAt = getClosestPlayer()
                 end
         
@@ -629,36 +712,957 @@ end)
         -- Toggle FOV visibility based on settings
         FOVCircle.Visible = (AimbotSettings.FOVVisible == 1)
         
+        
+
+        
     end,
  })
 
- 
 
 
- -- Slider for FOV
- local Slider = con:CreateSlider({
-    Name = "Fov Radius",
-    Range = {0, 5},
-    Increment = 0.2,
-    Suffix = "degrees",
-    CurrentValue = 1,
-    Flag = "Slider1", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
-    Callback = function(V)
-        AimbotSettings.FOV = V 
-        FOVCircleR = AimbotSettings.FOV  -- Update the circle's radius
-    end,
- })
 
--- Slider for Smoothness
-local SmoothnessSlider = Tab:CreateSlider({
-    Name = "Aimbot Smoothness",
-    Range = {0, 1},  -- Smoothness range from 0 (instant) to 1 (slower)
-    Increment = 0.01,  -- Small increment to adjust smoothness
-    Suffix = "Smoothness",  -- Label for the value
-    CurrentValue = AimbotSettings.Smoothness,  -- Default value from aimbot settings
-    Flag = "SmoothnessSlider",  -- Identifier for saving configuration
+ local Toggle = mis:CreateToggle({
+    Name = "Wireframe World [Partially Broken]",
+    CurrentValue = false,
+    Flag = "Toggle8", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
-        -- Update the smoothness setting based on slider value
-        AimbotSettings.Smoothness = Value
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        local UserInputService = game:GetService("UserInputService")
+        
+        -- Variable to store the toggle state
+        local wireframeEnabled = false
+        
+        -- Function to draw wireframe on parts
+        local function drawWireframeOnPart(part)
+            -- Ensure the part is valid and is a BasePart
+            if part:IsA("BasePart") and part.Parent then
+                local boundingBox = part:GetBoundingBox()
+                local topLeftFront = boundingBox[1]
+                local bottomRightBack = boundingBox[2]
+                
+                -- Create Drawing objects for each corner of the part (create lines between them)
+                local drawing = Drawing.new("Line")
+                drawing.Color = Color3.new(1, 1, 1) -- Wireframe color (white)
+                drawing.Thickness = 2
+                drawing.Transparency = 1
+                
+                -- Example: draw lines between bounding box corners (adjust as needed)
+                -- You can use part.CFrame to convert world positions to screen space (viewport)
+                local screenPos1, onScreen1 = workspace.CurrentCamera:WorldToViewportPoint(topLeftFront)
+                local screenPos2, onScreen2 = workspace.CurrentCamera:WorldToViewportPoint(bottomRightBack)
+                
+                -- Check if positions are on screen
+                if onScreen1 and onScreen2 then
+                    drawing.From = Vector2.new(screenPos1.X, screenPos1.Y)
+                    drawing.To = Vector2.new(screenPos2.X, screenPos2.Y)
+                    drawing.Visible = true
+                else
+                    drawing.Visible = false
+                end
+        
+                -- Clean up Drawing object after use
+                RunService.RenderStepped:Connect(function()
+                    drawing.Visible = wireframeEnabled
+                end)
+            end
+        end
+        
+        -- Function to toggle wireframe effect on and off
+        local function toggleWireframe()
+            wireframeEnabled = not wireframeEnabled
+            
+            -- Toggle wireframe visibility on parts
+            if wireframeEnabled then
+                -- Loop through all parts and apply the wireframe effect (once per toggle)
+                for _, obj in ipairs(workspace:GetDescendants()) do
+                    if obj:IsA("BasePart") then
+                        drawWireframeOnPart(obj)
+                    end
+                end
+            end
+        end
+        
+        -- Listen for user input to toggle wireframe effect (e.g., pressing 'W' key)
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+        
+            if input.KeyCode == Enum.KeyCode.W then -- Change key as needed
+                toggleWireframe()
+            end
+        end)
+        
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Npc Snaplines",
+    CurrentValue = false,
+    Flag = "Toggle9", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Place this script in a LocalScript (e.g., StarterPlayerScripts).
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local Camera = Workspace.CurrentCamera
+
+-- Function to create a BillboardGui for displaying name and distance
+local function createInfoLabel(object)
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Name = "InfoLabel"
+    billboardGui.Adornee = object
+    billboardGui.Size = UDim2.new(4, 0, 2, 0) -- Adjust size as needed
+    billboardGui.StudsOffset = Vector3.new(0, 3, 0) -- Position above the object
+    billboardGui.AlwaysOnTop = true
+    billboardGui.MaxDistance = 0 -- Ensures it remains the same size regardless of distance
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.new(1, 1, 1)
+    textLabel.TextStrokeTransparency = 0.5
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Text = object.Name
+    textLabel.Parent = billboardGui
+
+    local distanceLabel = Instance.new("TextLabel")
+    distanceLabel.Size = UDim2.new(1, 0, 0.5, 0)
+    distanceLabel.Position = UDim2.new(0, 0, 0.5, 0)
+    distanceLabel.BackgroundTransparency = 1
+    distanceLabel.TextColor3 = Color3.new(1, 1, 1)
+    distanceLabel.TextStrokeTransparency = 0.5
+    distanceLabel.TextScaled = true
+    distanceLabel.Font = Enum.Font.GothamBold
+    distanceLabel.Parent = billboardGui
+
+    return billboardGui, textLabel, distanceLabel
+end
+
+-- Function to create snap lines for humanoids
+local function createSnapLine()
+    local line = Drawing.new("Line")
+    line.Color = Color3.new(1, 0, 0) -- Red color
+    line.Thickness = 2
+    line.Visible = true
+    return line
+end
+
+-- Table to track active snap lines
+local activeSnapLines = {}
+
+-- Update ESP for each object in Workspace
+local function updateObjectESP()
+    for _, object in ipairs(Workspace:GetChildren()) do
+        if object:IsA("BasePart") and string.find(object.Name:lower(), "container") then
+            local billboardGui = object:FindFirstChild("InfoLabel")
+
+            if not billboardGui then
+                local newBillboardGui, textLabel, distanceLabel = createInfoLabel(object)
+                newBillboardGui.Parent = object
+                billboardGui = newBillboardGui
+            end
+
+            local distance = (object.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            billboardGui.TextLabel.Text = object.Name
+            billboardGui.TextLabel.Parent.TextLabel.Text = string.format("%.1f studs", distance)
+        end
+    end
+end
+
+-- Update snap lines for humanoids in Workspace.AiZones
+local function updateSnapLines()
+    -- Clear previous snap lines
+    for _, line in pairs(activeSnapLines) do
+        line:Remove()
+    end
+    activeSnapLines = {}
+
+    for _, zone in ipairs(Workspace:FindFirstChild("AiZones"):GetChildren()) do
+        for _, object in ipairs(zone:GetChildren()) do
+            if object:FindFirstChild("Humanoid") and object:FindFirstChild("HumanoidRootPart") then
+                local humanoidRootPart = object.HumanoidRootPart
+
+                -- Create and update snap line
+                local line = createSnapLine()
+                table.insert(activeSnapLines, line)
+
+                local screenPosition, onScreen = Camera:WorldToViewportPoint(humanoidRootPart.Position)
+                if onScreen then
+                    line.From = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y) -- Bottom center of the screen
+                    line.To = Vector2.new(screenPosition.X, screenPosition.Y)
+                    line.Visible = true
+                else
+                    line.Visible = false
+                end
+            end
+        end
+    end
+end
+
+-- Remove ESP if an object is removed
+local function onObjectRemoving(object)
+    local infoLabel = object:FindFirstChild("InfoLabel")
+    if infoLabel then
+        infoLabel:Destroy()
+    end
+end
+
+-- Setup connections and update ESP every 30 seconds
+for _, object in ipairs(Workspace:GetChildren()) do
+    if object:IsA("BasePart") and string.find(object.Name:lower(), "container") then
+        object.AncestryChanged:Connect(function()
+            if not object:IsDescendantOf(Workspace) then
+                onObjectRemoving(object)
+            end
+        end)
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    updateObjectESP()
+    updateSnapLines()
+end)
+
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Distance esp",
+    CurrentValue = false,
+    Flag = "Toggle10", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Place this script in a LocalScript (e.g., StarterPlayerScripts).
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+
+local function createDistanceLabel(character)
+    local billboardGui = Instance.new("BillboardGui")
+    billboardGui.Name = "DistanceLabel"
+    billboardGui.Adornee = character:WaitForChild("HumanoidRootPart")
+    billboardGui.Size = UDim2.new(8, 0, 2, 0) -- Adjust size as needed
+    billboardGui.StudsOffset = Vector3.new(0, -2.5, 0) -- Position below character
+    billboardGui.AlwaysOnTop = true
+    billboardGui.MaxDistance = 0 -- Ensures it remains the same size regardless of distance
+    billboardGui.SizeOffset = Vector2.new(0, 0) -- Prevents scaling with distance
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.TextColor3 = Color3.new(1, 1, 1)
+    textLabel.TextStrokeTransparency = 0.5
+    textLabel.TextScaled = true
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.Parent = billboardGui
+
+    return billboardGui, textLabel
+end
+
+-- Update ESP for each player
+local function updateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local character = player.Character
+            local billboardGui = character:FindFirstChild("DistanceLabel")
+
+            if not billboardGui then
+                local newBillboardGui, textLabel = createDistanceLabel(character)
+                newBillboardGui.Parent = character
+                billboardGui = newBillboardGui
+            end
+
+            local humanoidRootPart = character.HumanoidRootPart
+            local distance = (humanoidRootPart.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+            billboardGui.TextLabel.Text = string.format("%.1f studs", distance)
+        end
+    end
+end
+
+-- Remove ESP if a character is removed
+local function onCharacterRemoving(character)
+    local distanceLabel = character:FindFirstChild("DistanceLabel")
+    if distanceLabel then
+        distanceLabel:Destroy()
+    end
+end
+
+-- Setup connections for ESP
+local function setupPlayer(player)
+    player.CharacterAdded:Connect(function(character)
+        character:WaitForChild("HumanoidRootPart").GetPropertyChangedSignal("Position"):Connect(updateESP)
+    end)
+    player.CharacterRemoving:Connect(onCharacterRemoving)
+end
+
+-- Main loop
+for _, player in ipairs(Players:GetPlayers()) do
+    setupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+RunService.RenderStepped:Connect(updateESP)
+
+    end,
+ })
+
+walkSpeed = 50
+
+ local Button = mis:CreateButton({
+    Name = "Enable Walk Speed changer",
+    Callback = function()
+          -- Set the initial WalkSpeed here
+
+        local function updatePlayerSpeed()
+            -- Access the local player's character
+            local player = game.Players.LocalPlayer
+            local character = player.Character or player.CharacterAdded:Wait()
+            
+            -- Wait for the Humanoid to load
+            local humanoid = character:WaitForChild("Humanoid")
+            
+            -- Continuously update the WalkSpeed
+            while true do
+                humanoid.WalkSpeed = walkSpeed
+                wait(0.1)  -- Update every 0.1 seconds to prevent constant setting
+            end
+        end
+        
+        -- Call the function to start updating speed
+        updatePlayerSpeed()
+        
+    end,
+ })
+
+
+ local Toggle = aim:CreateToggle({
+    Name = "TriggerBot",
+    CurrentValue = false,
+    Flag = "Toggle11", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+        local player = game:GetService("Players").LocalPlayer
+        local mouse = player:GetMouse()
+        local runService = game:GetService("RunService")
+        local userInputService = game:GetService("UserInputService")
+        
+        -- Settings
+        local TriggerBotSettings = {
+            ButtonToHold = Enum.UserInputType.MouseButton2, -- Default: Right Mouse Button
+            DelayTime = 0.1, -- Delay between mouse press and release
+            TeamCheck = TRTEAMCHECK, -- Set to true to enable team check; false to disable
+        }
+        
+        local buttonHeld = false
+        
+        -- Detect button press and release
+        userInputService.InputBegan:Connect(function(input)
+            if input.UserInputType == TriggerBotSettings.ButtonToHold then
+                buttonHeld = true
+            end
+        end)
+        
+        userInputService.InputEnded:Connect(function(input)
+            if input.UserInputType == TriggerBotSettings.ButtonToHold then
+                buttonHeld = false
+            end
+        end)
+        
+        -- Main loop
+        runService.RenderStepped:Connect(function()
+            if buttonHeld and mouse.Target and mouse.Target.Parent:FindFirstChild("Humanoid") then
+                local targetCharacter = mouse.Target.Parent
+                local targetPlayer = game:GetService("Players"):GetPlayerFromCharacter(targetCharacter)
+                
+                -- If team check is enabled, ignore players on the same team
+                if TriggerBotSettings.TeamCheck and targetPlayer and player.Team and targetPlayer.Team == player.Team then
+                    return
+                end
+                
+                if targetCharacter.Name ~= player.Name then
+                    mouse1press()
+                    wait(TriggerBotSettings.DelayTime)
+                    mouse1release()
+                end
+            end
+        end)
+        
+    
+    end,
+ })
+
+
+
+
+ local Toggle = vis:CreateToggle({
+    Name = "Skeleton Esp [R6 Rig Only]",
+    CurrentValue = false,
+    Flag = "Toggle12", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Camera = workspace.CurrentCamera
+
+-- Configuration
+local ESPSettings = {
+    Enabled = true,
+    LineColor = Color3.fromRGB(0, 255, 0), -- Bright green
+    LineThickness = 2,
+    Transparency = 1
+}
+
+-- Utility function to create lines
+local function createLine()
+    local line = Drawing.new("Line")
+    line.Visible = false
+    line.Color = ESPSettings.LineColor
+    line.Thickness = ESPSettings.LineThickness
+    line.Transparency = ESPSettings.Transparency
+    return line
+end
+
+-- Map body parts for skeleton
+local SkeletonMap = {
+    {"Head", "UpperTorso"},
+    {"UpperTorso", "LowerTorso"},
+    {"UpperTorso", "LeftUpperArm"},
+    {"LeftUpperArm", "LeftLowerArm"},
+    {"LeftLowerArm", "LeftHand"},
+    {"UpperTorso", "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    {"LowerTorso", "LeftUpperLeg"},
+    {"LeftUpperLeg", "LeftLowerLeg"},
+    {"LeftLowerLeg", "LeftFoot"},
+    {"LowerTorso", "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"}
+}
+
+-- Table to store player ESP lines
+local ESPLines = {}
+
+-- Update ESP for a player
+local function updateESP(player)
+    local character = player.Character
+    if not character then return end
+
+    for _, pair in ipairs(SkeletonMap) do
+        local part0 = character:FindFirstChild(pair[1])
+        local part1 = character:FindFirstChild(pair[2])
+
+        if part0 and part1 and part0:IsA("BasePart") and part1:IsA("BasePart") then
+            local line = ESPLines[player][pair] or createLine()
+
+            local pos0, onScreen0 = Camera:WorldToViewportPoint(part0.Position)
+            local pos1, onScreen1 = Camera:WorldToViewportPoint(part1.Position)
+
+            if onScreen0 and onScreen1 then
+                line.Visible = ESPSettings.Enabled
+                line.From = Vector2.new(pos0.X, pos0.Y)
+                line.To = Vector2.new(pos1.X, pos1.Y)
+            else
+                line.Visible = false
+            end
+
+            ESPLines[player][pair] = line
+        end
+    end
+end
+
+-- Cleanup ESP lines for a player
+local function cleanupESP(player)
+    if ESPLines[player] then
+        for _, line in pairs(ESPLines[player]) do
+            line:Remove()
+        end
+        ESPLines[player] = nil
+    end
+end
+
+-- Setup ESP for a player
+local function setupESP(player)
+    ESPLines[player] = {}
+
+    player.CharacterAdded:Connect(function()
+        cleanupESP(player)
+        ESPLines[player] = {}
+    end)
+
+    player.CharacterRemoving:Connect(function()
+        cleanupESP(player)
+    end)
+end
+
+-- Initialize ESP for all players
+local function initializeESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer then
+            setupESP(player)
+        end
+    end
+
+    Players.PlayerAdded:Connect(function(player)
+        setupESP(player)
+    end)
+
+    Players.PlayerRemoving:Connect(function(player)
+        cleanupESP(player)
+    end)
+end
+
+-- Main Render Loop
+RunService.RenderStepped:Connect(function()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= Players.LocalPlayer and ESPLines[player] then
+            updateESP(player)
+        end
+    end
+end)
+
+-- Start the ESP system
+initializeESP()
+
+    end,
+ })
+
+
+ local Toggle = wor:CreateToggle({
+    Name = "Fullbright",
+    CurrentValue = false,
+    Flag = "Toggle13", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+-- Fullbright Script
+
+-- Services
+local Lighting = game:GetService("Lighting")
+
+-- Function to enable fullbright
+local function EnableFullbright()
+    Lighting.Ambient = Color3.fromRGB(255, 255, 255)  -- Full brightness
+    Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)  -- Full brightness outside
+    Lighting.Brightness = 2  -- Increase brightness level
+    Lighting.ShadowSoftness = 0  -- No shadows
+    Lighting.FogStart = 0  -- Disable fog
+    Lighting.FogEnd = 100000  -- Extend fog range to make it invisible
+end
+
+-- Call the function to enable fullbright
+EnableFullbright()
+
+-- Optional: Set up a toggle keybind to turn it off and on
+local UserInputService = game:GetService("UserInputService")
+local isFullbright = true
+local toggleKey = Enum.KeyCode.F -- Change this key if desired
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == toggleKey then
+        isFullbright = not isFullbright
+        if isFullbright then
+            EnableFullbright()
+        else
+            -- Restore default lighting
+            Lighting.Ambient = Color3.fromRGB(127, 127, 127)  -- Default ambient light
+            Lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)  -- Default outdoor ambient light
+            Lighting.Brightness = 1  -- Default brightness
+            Lighting.ShadowSoftness = 0.5  -- Default shadow softness
+            Lighting.FogStart = 0  -- Default fog start
+            Lighting.FogEnd = 100000  -- Default fog end
+        end
+    end
+end)
+
+    end,
+ })
+
+playerfov = 60
+
+ local Slider = mis:CreateSlider({
+    Name = "FOV",
+    Range = {1, 300},
+    Increment = 1,
+    Suffix = "Degrees",
+    CurrentValue = 60,
+    Flag = "Slider5", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+playerfov = Value 
+    end,
+ })
+
+ local Button = mis:CreateButton({
+    Name = "Update Fov ",
+    Callback = function()
+-- Place this script inside StarterPlayerScripts
+
+local targetFOV = playerfov -- Set your desired FOV value here
+local camera = workspace.CurrentCamera
+
+game:GetService("RunService").RenderStepped:Connect(function()
+    camera.FieldOfView = targetFOV
+end)
+
+    end,
+ })
+
+ local Button = mis:CreateButton({
+    Name = "Rejoin Server",
+    Callback = function()
+        local TeleportService = game:GetService("TeleportService")
+        local Players = game:GetService("Players")
+        
+        -- Get the local player
+        local player = Players.LocalPlayer
+        
+        -- Retrieve the current game's PlaceId and the server's JobId
+        local placeId = game.PlaceId
+        local jobId = game.JobId
+        
+        -- Teleport the player to the same server instance (rejoin)
+        TeleportService:TeleportToPlaceInstance(placeId, jobId, player)
+        
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Chams",
+    CurrentValue = false,
+    Flag = "Toggle17", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        
+        -- Configuration
+        local ApplyToSelf = false -- Set to true to apply effect to your own character
+        local ColorChangeEnabled = false -- Set to true to enable gradual color shifts
+        local ColorChangeInterval = 3 -- Time (seconds) between color changes
+        local DefaultColor = Color3.fromRGB(255, 0, 0) -- Bright Red
+        
+        -- Function to remove clothes
+        local function removeClothes(character)
+            for _, item in ipairs(character:GetChildren()) do
+                if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") or item:IsA("Accessory") then
+                    item:Destroy()
+                end
+            end
+        end
+        
+        -- Function to apply neon effect
+        local function applyNeonEffect(character)
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.Material = Enum.Material.Neon
+                    part.Color = DefaultColor
+                end
+            end
+        end
+        
+        -- Function to apply a highlight that renders on top of all other objects
+        local function applyHighlight(character)
+            local highlight = Instance.new("Highlight")
+            highlight.Name = "NeonHighlight"
+            highlight.Adornee = character
+            highlight.FillColor = DefaultColor
+            highlight.FillTransparency = 1  -- Set to fully transparent so details remain visible
+            highlight.OutlineColor = DefaultColor
+            highlight.OutlineTransparency = 0  -- Outline is visible
+            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            highlight.Parent = character
+        end
+        
+        -- Function to shift colors over time (if enabled)
+        local function updateColors(character)
+            if not ColorChangeEnabled then return end
+            task.spawn(function()
+                while character.Parent do
+                    local newColor = Color3.fromRGB(math.random(200, 255), 0, 0) -- Varying shades of bright red
+                    for _, part in ipairs(character:GetDescendants()) do
+                        if part:IsA("BasePart") and part.Material == Enum.Material.Neon then
+                            part.Color = newColor
+                        end
+                    end
+                    local highlight = character:FindFirstChild("NeonHighlight")
+                    if highlight then
+                        highlight.FillColor = newColor
+                        highlight.OutlineColor = newColor
+                    end
+                    task.wait(ColorChangeInterval)
+                end
+            end)
+        end
+        
+        -- Function to handle new characters
+        local function onCharacterAdded(character, player)
+            if not ApplyToSelf and player == Players.LocalPlayer then return end
+            removeClothes(character)
+            applyNeonEffect(character)
+            applyHighlight(character) -- This ensures the character is highlighted on top
+            updateColors(character)
+        end
+        
+        -- Apply effect to all current players
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.Character then
+                onCharacterAdded(player.Character, player)
+            end
+            player.CharacterAdded:Connect(function(character)
+                onCharacterAdded(character, player)
+            end)
+        end
+        
+        -- Apply effect to new players
+        Players.PlayerAdded:Connect(function(player)
+            player.CharacterAdded:Connect(function(character)
+                onCharacterAdded(character, player)
+            end)
+        end)
+        
+    end,
+ })
+
+ local Toggle = vis:CreateToggle({
+    Name = "Glow",
+    CurrentValue = false,
+    Flag = "Toggle18", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        
+        -- Configuration
+        local ApplyToSelf = false -- Set to true to apply effect to your own character
+        local ColorChangeEnabled = false -- Set to true to enable gradual color shifts
+        local ColorChangeInterval = 3 -- Time (seconds) between color changes
+        local DefaultColor = Color3.fromRGB(255, 0, 0) -- Bright Red
+        
+        -- Function to remove clothes
+        local function removeClothes(character)
+            for _, item in ipairs(character:GetChildren()) do
+                if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") or item:IsA("Accessory") then
+                    item:Destroy()
+                end
+            end
+        end
+        
+        -- Function to apply neon effect
+        local function applyNeonEffect(character)
+            for _, part in ipairs(character:GetDescendants()) do
+                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+                    part.Material = Enum.Material.Neon
+                    part.Color = DefaultColor
+                end
+            end
+        end
+        
+        -- Function to shift colors over time (if enabled)
+        local function updateColors(character)
+            if not ColorChangeEnabled then return end
+            task.spawn(function()
+                while character.Parent do
+                    local newColor = Color3.fromRGB(math.random(200, 255), 0, 0) -- Varying shades of bright red
+                    for _, part in ipairs(character:GetDescendants()) do
+                        if part:IsA("BasePart") and part.Material == Enum.Material.Neon then
+                            part.Color = newColor
+                        end
+                    end
+                    task.wait(ColorChangeInterval)
+                end
+            end)
+        end
+        
+        -- Function to handle new characters
+        local function onCharacterAdded(character, player)
+            if not ApplyToSelf and player == Players.LocalPlayer then return end
+            removeClothes(character)
+            applyNeonEffect(character)
+            updateColors(character)
+        end
+        
+        -- Apply effect to all current players
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player.Character then
+                onCharacterAdded(player.Character, player)
+            end
+            player.CharacterAdded:Connect(function(character)
+                onCharacterAdded(character, player)
+            end)
+        end
+        
+        -- Apply effect to new players
+        Players.PlayerAdded:Connect(function(player)
+            player.CharacterAdded:Connect(function(character)
+                onCharacterAdded(character, player)
+            end)
+        end)
+        
+    end,
+ })
+
+ local Section = con:CreateSection("Triggerbot Config")
+
+ TRTEAMCHECK = TRUE
+delayTime = 0.1
+
+ local Slider = con:CreateSlider({
+    Name = "Trigger Bot Delay",
+    Range = {0, 1},
+    Increment = 0.01,
+    Suffix = "Milliseconds",
+    CurrentValue = 0.1,
+    Flag = "Slider4", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+delayTime = Value
+    end,
+ })
+
+
+ local Toggle = con:CreateToggle({
+    Name = "Trigger bot teamcheck",
+    CurrentValue = true,
+    Flag = "Toggle14", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+TRTEAMCHECK = Value
+    end,
+ })
+
+ local Section = con:CreateSection("Aimbot Config")
+
+FovTRCon = 0.5
+
+ local Slider = con:CreateSlider({
+    Name = "Fov circle transparency",
+    Range = {0.01, 1},
+    Increment = 0.01,
+    Suffix = "transparency",
+    CurrentValue = 0.5,
+    Flag = "Slider6", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+FovTRCon = Va
+    end,
+ })
+
+ AimkeyCon = Enum.UserInputType.MouseButton2 -- Default aim key
+
+ local Dropdown = con:CreateDropdown({
+    Name = "Aim Key",
+    Options = {
+        "Right Mouse Button",  -- MouseButton2
+        "Left Mouse Button",   -- MouseButton1
+        "Middle Mouse Button", -- MouseButton3
+        "Left Shift",          -- Keyboard LShift
+        "E Key"               -- Keyboard E
+    },
+    CurrentOption = {"Right Mouse Button"}, -- Default option
+    MultipleOptions = false,
+    Flag = "Dropdown1", -- Unique flag for config saving
+    Callback = function(Options)
+        -- Map selected option to Enum values
+        local keyMappings = {
+            ["Right Mouse Button"] = Enum.UserInputType.MouseButton2,
+            ["Left Mouse Button"] = Enum.UserInputType.MouseButton1,
+            ["Middle Mouse Button"] = Enum.UserInputType.MouseButton3,
+            ["Left Shift"] = Enum.KeyCode.LeftShift,
+            ["E Key"] = Enum.KeyCode.E
+        }
+ 
+        AimkeyCon = keyMappings[Options] or Enum.UserInputType.MouseButton2 -- Fallback to default
+    end,
+ })
+
+FovIsVisible = 0 -- Default state
+
+local Toggle = con:CreateToggle({
+   Name = "Fov Visibilty",
+   CurrentValue = false,
+   Flag = "Toggle16", -- Ensure a unique flag for config saving
+   Callback = function(Value)
+       FovIsVisible = Value and 1 or 0 -- Sets to 1 if true, otherwise 0
+   end,
+})
+
+
+-- Global variable to store the smoothing value
+editfov = 60  -- This is now a global variable
+AIMTEAMCHECK = true
+FOVColor = Color3.new(1, 0, 0)
+-- Slider to control the aimbot smoothing
+local Slider = con:CreateSlider({
+    Name = "Aimbot Fov",
+    Range = {10, 300},
+    Increment = 1,
+    Suffix = "degrees",
+    CurrentValue = 60,
+    Flag = "Slider1", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+        -- Update the global variable `smoothness` whenever the slider changes
+        editfov = Value
+        print("Smoothness updated to:", smoothness)  -- Optional: Print the new value for debugging
     end,
 })
+
+ smoothness = 1
+ -- Slider for Smoothness
+ local SmoothnessSlider = con:CreateSlider({
+     Name = "Aimbot Smoothness",
+     Range = {0.9, 1},  -- Smoothness range from 0 (instant) to 1 (slower)
+     Increment = 0.01,  -- Small increment to adjust smoothness
+     Suffix = "Higher is faster",  -- Label for the value
+     CurrentValue = 1,  -- Default value from aimbot settings
+     Flag = "Slider2",  -- Identifier for saving configuration
+     Callback = function(Value)
+         -- Update the smoothness setting based on slider value
+         smoothness = Value
+     end,
+ })
+
+ local Toggle = con:CreateToggle({
+    Name = "Aimbot teamcheck",
+    CurrentValue = true,
+    Flag = "Toggle15", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+TRTEAMCHECK = Value 
+    end,
+ })
+
+-- Declare FOVColor at a higher scope
+FOVCconfig = Color3.new(1, 0, 0) -- Default red
+
+local ColorPicker = con:CreateColorPicker({
+    Name = "Fov color",
+    Color = FOVColor, -- Use the current value for initial color
+    Flag = "ColorPicker1", -- Unique flag for config saving
+    Callback = function(Value)
+        FOVCconfig = Value  -- Update the FOVColor variable with the chosen color
+        print("FOVColor updated to:", FOVColor) -- Debug print to confirm update
+    end
+})
+
+local Section = con:CreateSection("Snaplines config")
+
+SnaplinesCconfig = Color3.new(0, 1, 0) -- Default red
+
+local ColorPicker = con:CreateColorPicker({
+    Name = "Snaplines color",
+    Color = SnaplinesCconfig, -- Use the current value for initial color
+    Flag = "ColorPicker2", -- Unique flag for config saving
+    Callback = function(Value)
+        SnaplinesCconfig = Value  -- Update the FOVColor variable with the chosen color
+        print("FOVColor updated to:", SnaplinesCconfig) -- Debug print to confirm update
+    end
+})
+
+
+local Section = con:CreateSection("Health config")
+
+HealthEspColorCon = Color3.new(0, 1, 0)
+
+local ColorPicker = con:CreateColorPicker({
+    Name = "Health esp color",
+    Color = HealthEspColorCon,
+    Flag = "ColorPicker3", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+HealthEspColorCon = Value
+    end
+})
+
