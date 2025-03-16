@@ -161,28 +161,38 @@ RunService.RenderStepped:Connect(updateESP)
     CurrentValue = false,
     Flag = "Toggle2", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
--- Universal Snapline ESP
--- Draws a line from the bottom-middle of the screen to each player dynamically.
+-- Universal Snapline ESP with Toggle & Rainbow Option
 
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-
--- Variables
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
+
+-- Configuration Variables  -- Default line color (Green)
+local RainbowSnaplines = RainbowSnaplineC                -- Set to true for rainbow snaplines
+local RainbowSpeed = SnaplineRainbowC                      -- Multiplier for rainbow speed (adjust as desired)
+
+-- Persistent globals for toggling
+_G.isSnaplineESPEnabled = _G.isSnaplineESPEnabled or false
+if _G.snaplineESPConnection then
+    _G.snaplineESPConnection:Disconnect()
+    _G.snaplineESPConnection = nil
+end
+
+-- Table to store active Drawing lines
 local DrawingLines = {}
 
--- Function to create a line
+-- Function to create a new line using Drawing
 local function createLine()
     local line = Drawing.new("Line")
     line.Visible = false
-    line.Color = SnaplinesCconfig -- Green
+    line.Color = SnaplinesCconfig
     line.Thickness = 2
     return line
 end
 
--- Function to update Snapline for a player
+-- Function to update the snapline for a specific player
 local function updatePlayerSnapline(player)
     if player == LocalPlayer or not player.Character or not player.Character:FindFirstChild("Humanoid") then
         return
@@ -190,24 +200,15 @@ local function updatePlayerSnapline(player)
 
     local character = player.Character
     local humanoid = character:FindFirstChild("Humanoid")
-
-    -- Skip players with no health
-    if humanoid.Health <= 0 then
-        return
-    end
+    if humanoid.Health <= 0 then return end
 
     local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then
-        return
-    end
+    if not rootPart then return end
 
     local line = DrawingLines[player.Name] or createLine()
     DrawingLines[player.Name] = line
 
-    -- Get the player's position on the screen
     local rootPosition, visible = Camera:WorldToViewportPoint(rootPart.Position)
-
-    -- Get the bottom middle of the screen
     local screenSize = Camera.ViewportSize
     local bottomMiddle = Vector2.new(screenSize.X / 2, screenSize.Y)
 
@@ -215,12 +216,18 @@ local function updatePlayerSnapline(player)
         line.Visible = true
         line.From = bottomMiddle
         line.To = Vector2.new(rootPosition.X, rootPosition.Y)
+        if RainbowSnaplines then
+            local hue = (tick() * RainbowSpeed) % 1
+            line.Color = Color3.fromHSV(hue, 1, 1)
+        else
+            line.Color = SnaplinesCconfig
+        end
     else
         line.Visible = false
     end
 end
 
--- Function to update Snaplines for all players
+-- Function to update snaplines for all players
 local function updateSnaplines()
     for _, player in ipairs(Players:GetPlayers()) do
         updatePlayerSnapline(player)
@@ -236,8 +243,45 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
--- Render update
-RunService.RenderStepped:Connect(updateSnaplines)
+---------------------------------------------------
+-- Toggle Functions
+---------------------------------------------------
+
+-- Enable Snapline ESP
+local function enableSnaplines()
+    _G.snaplineESPConnection = RunService.RenderStepped:Connect(updateSnaplines)
+    _G.isSnaplineESPEnabled = true
+    print("Snapline ESP enabled")
+end
+
+-- Disable Snapline ESP
+local function disableSnaplines()
+    if _G.snaplineESPConnection then
+        _G.snaplineESPConnection:Disconnect()
+        _G.snaplineESPConnection = nil
+    end
+    for name, line in pairs(DrawingLines) do
+        if line then
+            line:Remove()
+            DrawingLines[name] = nil
+        end
+    end
+    _G.isSnaplineESPEnabled = false
+    print("Snapline ESP disabled")
+end
+
+-- Toggle function for Snapline ESP
+local function toggleSnaplines()
+    if _G.isSnaplineESPEnabled then
+        disableSnaplines()
+    else
+        enableSnaplines()
+    end
+end
+
+-- Run toggle on script execution
+toggleSnaplines()
+
 
     end,
  })
@@ -351,59 +395,89 @@ end)
     CurrentValue = false,
     Flag = "Toggle4", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
--- Tool ESP
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Camera = workspace.CurrentCamera
-local ToolESPTexts = {}
 
-local function createText()
-    local text = Drawing.new("Text")
-    text.Visible = false
-    text.Size = 20
-    text.Color = Color3.new(1, 1, 0) -- Yellow
-    text.Center = true
-    return text
+-- Persistent globals for toggling and connection storage
+_G.isToolESPEnabled = _G.isToolESPEnabled or false
+if _G.toolESPConnection then
+    _G.toolESPConnection:Disconnect()
+    _G.toolESPConnection = nil
 end
 
-local function updateToolESP(player)
-    if player == Players.LocalPlayer or not player.Character then
-        return
-    end
-
-    local character = player.Character
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    local tool = player:FindFirstChildOfClass("Backpack") or character:FindFirstChildOfClass("Tool")
-
-    local text = ToolESPTexts[player.Name] or createText()
-    ToolESPTexts[player.Name] = text
-
-    if humanoidRootPart and tool then
-        local screenPosition, visible = Camera:WorldToViewportPoint(humanoidRootPart.Position)
-        if visible then
-            text.Visible = true
-            text.Text = tool.Name
-            text.Position = Vector2.new(screenPosition.X, screenPosition.Y - 20)
-        else
-            text.Visible = false
-        end
-    else
-        text.Visible = false
-    end
-end
-
-RunService.RenderStepped:Connect(function()
+-- Helper: Remove existing Tool ESP labels from all players
+local function removeToolESP()
     for _, player in ipairs(Players:GetPlayers()) do
-        updateToolESP(player)
+        if player.Character and player.Character:FindFirstChild("Head") then
+            local head = player.Character.Head
+            local esp = head:FindFirstChild("ToolESP")
+            if esp then
+                esp:Destroy()
+            end
+        end
     end
-end)
+end
 
-Players.PlayerRemoving:Connect(function(player)
-    if ToolESPTexts[player.Name] then
-        ToolESPTexts[player.Name]:Remove()
-        ToolESPTexts[player.Name] = nil
+-- Update Tool ESP for all players every frame
+local function updateToolESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character and player.Character:FindFirstChild("Head") then
+            local head = player.Character.Head
+            local toolName = "None"
+            -- Look for an equipped tool (Tools are parented to the character)
+            for _, child in ipairs(player.Character:GetChildren()) do
+                if child:IsA("Tool") then
+                    toolName = child.Name
+                    break
+                end
+            end
+
+            local billboard = head:FindFirstChild("ToolESP")
+            if not billboard then
+                billboard = Instance.new("BillboardGui")
+                billboard.Name = "ToolESP"
+                billboard.Adornee = head
+                billboard.Size = UDim2.new(0, 150, 0, 50)
+                billboard.StudsOffset = Vector3.new(0, 2, 0)
+                billboard.AlwaysOnTop = true
+
+                local label = Instance.new("TextLabel", billboard)
+                label.Name = "TextLabel"
+                label.Size = UDim2.new(1, 0, 1, 0)
+                label.BackgroundTransparency = 1
+                label.TextScaled = true
+                label.TextColor3 = Color3.new(1, 1, 1)
+                label.Font = Enum.Font.SourceSansBold
+
+                billboard.Parent = head
+            end
+            if billboard:FindFirstChild("TextLabel") then
+                billboard.TextLabel.Text = toolName
+            end
+        end
     end
-end)
+end
+
+-- Toggle function: Enables or disables the Tool ESP update loop.
+local function toggleToolESP()
+    _G.isToolESPEnabled = not _G.isToolESPEnabled
+    if _G.isToolESPEnabled then
+        _G.toolESPConnection = RunService.RenderStepped:Connect(function()
+            updateToolESP()
+        end)
+        print("Tool ESP enabled")
+    else
+        if _G.toolESPConnection then
+            _G.toolESPConnection:Disconnect()
+            _G.toolESPConnection = nil
+        end
+        removeToolESP()
+        print("Tool ESP disabled")
+    end
+end
+
+toggleToolESP()  -- Toggle the ESP mode on script execution
+
 
     end,
  })
@@ -600,13 +674,14 @@ end)
         
         -- Settings
         local AimbotSettings = {
-            FOV = editfov, -- Size of the Field of View
-            Smoothness = smoothness, -- Smoothness factor (0 is instant, higher is slower)
-            AimKey = AimkeyCon , -- Mouse Button to aim
-            FOVColor = FOVCconfig, -- Red
-            FOVTransparency = 0.5, -- Transparency of the FOV circle
-            FOVVisible = FovIsVisible, -- Set to 1 to draw the FOV, 0 to hide it
-            TeamCheck = AIMTEAMCHECK, -- Set to true to enable universal team check, false to disable
+            FOV = editfov, -- Field of View size
+            Smoothness = smoothness, -- Smoothing factor (0 = instant, higher = slower)
+            AimKey = AimkeyCon, -- Key to activate aimbot
+            FOVColor = FOVCconfig, -- FOV circle color
+            FOVTransparency = 0.5, -- FOV circle transparency
+            FOVVisible = FovIsVisible, -- Show/hide FOV circle (1 = show, 0 = hide)
+            TeamCheck = AIMTEAMCHECK, -- Enable/disable team check
+            VisibilityCheck = AIMVISIBILITYCHECK, -- Enable/disable visibility check
         }
         
         -- Variables
@@ -614,7 +689,7 @@ end)
         local AimingAt = nil
         local IsAiming = false
         
-        -- Initialize the FOV circle
+        -- Initialize FOV circle
         FOVCircle.Visible = (AimbotSettings.FOVVisible == 1)
         FOVCircle.Color = AimbotSettings.FOVColor
         FOVCircle.Thickness = 2
@@ -622,21 +697,36 @@ end)
         FOVCircle.Radius = AimbotSettings.FOV
         FOVCircle.Filled = false
         
-        -- Function to find the closest player within the FOV, with an optional team check
+        -- Function to check if a target is visible (Raycast check)
+        local function isTargetVisible(targetPart)
+            if not AimbotSettings.VisibilityCheck then
+                return true -- Skip visibility check if disabled
+            end
+        
+            local origin = Camera.CFrame.Position
+            local direction = (targetPart.Position - origin).Unit * (targetPart.Position - origin).Magnitude
+            local raycastParams = RaycastParams.new()
+            raycastParams.FilterDescendantsInstances = {Players.LocalPlayer.Character}
+            raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
+        
+            local result = workspace:Raycast(origin, direction, raycastParams)
+            return result == nil or result.Instance == targetPart
+        end
+        
+        -- Function to get closest valid target within FOV
         local function getClosestPlayer()
             local closestPlayer = nil
             local shortestDistance = AimbotSettings.FOV
         
             for _, player in ipairs(Players:GetPlayers()) do
                 if player ~= Players.LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
-                    -- If team check is enabled, ignore players on the same team
                     if AimbotSettings.TeamCheck and player.Team and Players.LocalPlayer.Team and player.Team == Players.LocalPlayer.Team then
-                        -- Same team, skip this player
+                        -- Skip teammates if team check is enabled
                     else
                         local head = player.Character.Head
                         local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
         
-                        if onScreen then
+                        if onScreen and isTargetVisible(head) then
                             local mousePos = UserInputService:GetMouseLocation()
                             local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
         
@@ -652,7 +742,7 @@ end)
             return closestPlayer
         end
         
-        -- Function to smoothly aim at a target's head
+        -- Function to smoothly aim at a target
         local function aimAt(target)
             if not target or not target.Character or not target.Character:FindFirstChild("Head") then
                 return
@@ -662,20 +752,19 @@ end)
             local targetPos = Camera:WorldToViewportPoint(head.Position)
             local mousePos = UserInputService:GetMouseLocation()
         
-            -- Calculate smooth aim movement
+            -- Smooth aim movement
             local deltaX = (targetPos.X - mousePos.X) * AimbotSettings.Smoothness
             local deltaY = (targetPos.Y - mousePos.Y) * AimbotSettings.Smoothness
         
-            -- Move the mouse smoothly
+            -- Move the mouse
             mousemoverel(deltaX, deltaY)
         end
         
-        -- Update FOV circle position
+        -- Update FOV circle position & radius dynamically
         RunService.RenderStepped:Connect(function()
             local mousePos = UserInputService:GetMouseLocation()
             FOVCircle.Position = mousePos
-            
-            -- Update FOV circle radius based on the FOV setting
+        
             if FOVCircle.Radius ~= AimbotSettings.FOV then
                 FOVCircle.Radius = AimbotSettings.FOV
             end
@@ -696,7 +785,7 @@ end)
             end
         end)
         
-        -- Listen for aim key
+        -- Listen for aim key input
         UserInputService.InputBegan:Connect(function(input)
             if input.UserInputType == AimbotSettings.AimKey then
                 IsAiming = true
@@ -709,11 +798,9 @@ end)
             end
         end)
         
-        -- Toggle FOV visibility based on settings
+        -- Toggle FOV visibility
         FOVCircle.Visible = (AimbotSettings.FOVVisible == 1)
         
-        
-
         
     end,
  })
@@ -722,75 +809,91 @@ end)
 
 
  local Toggle = mis:CreateToggle({
-    Name = "Wireframe World [Partially Broken]",
+    Name = "Wireframe World",
     CurrentValue = false,
     Flag = "Toggle8", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
         local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        local UserInputService = game:GetService("UserInputService")
+
+        -- Use _G to persist state across script executions
+        _G.isWireframeEnabled = _G.isWireframeEnabled or false
+        _G.originalWireframeProperties = _G.originalWireframeProperties or {}
         
-        -- Variable to store the toggle state
-        local wireframeEnabled = false
-        
-        -- Function to draw wireframe on parts
-        local function drawWireframeOnPart(part)
-            -- Ensure the part is valid and is a BasePart
-            if part:IsA("BasePart") and part.Parent then
-                local boundingBox = part:GetBoundingBox()
-                local topLeftFront = boundingBox[1]
-                local bottomRightBack = boundingBox[2]
-                
-                -- Create Drawing objects for each corner of the part (create lines between them)
-                local drawing = Drawing.new("Line")
-                drawing.Color = Color3.new(1, 1, 1) -- Wireframe color (white)
-                drawing.Thickness = 2
-                drawing.Transparency = 1
-                
-                -- Example: draw lines between bounding box corners (adjust as needed)
-                -- You can use part.CFrame to convert world positions to screen space (viewport)
-                local screenPos1, onScreen1 = workspace.CurrentCamera:WorldToViewportPoint(topLeftFront)
-                local screenPos2, onScreen2 = workspace.CurrentCamera:WorldToViewportPoint(bottomRightBack)
-                
-                -- Check if positions are on screen
-                if onScreen1 and onScreen2 then
-                    drawing.From = Vector2.new(screenPos1.X, screenPos1.Y)
-                    drawing.To = Vector2.new(screenPos2.X, screenPos2.Y)
-                    drawing.Visible = true
-                else
-                    drawing.Visible = false
-                end
-        
-                -- Clean up Drawing object after use
-                RunService.RenderStepped:Connect(function()
-                    drawing.Visible = wireframeEnabled
-                end)
+        -- Helper: determine if a part is inside a player character model
+        local function isPlayerCharacter(part)
+            local model = part:FindFirstAncestorOfClass("Model")
+            if model and model:FindFirstChildWhichIsA("Humanoid") then
+                return true
             end
+            return false
         end
         
-        -- Function to toggle wireframe effect on and off
-        local function toggleWireframe()
-            wireframeEnabled = not wireframeEnabled
-            
-            -- Toggle wireframe visibility on parts
-            if wireframeEnabled then
-                -- Loop through all parts and apply the wireframe effect (once per toggle)
-                for _, obj in ipairs(workspace:GetDescendants()) do
-                    if obj:IsA("BasePart") then
-                        drawWireframeOnPart(obj)
+        -- Enable wireframe: iterate all BaseParts (except those in player characters)
+        local function enableWireframe()
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                if obj:IsA("BasePart") and not isPlayerCharacter(obj) then
+                    -- Store original properties if not already stored
+                    if not _G.originalWireframeProperties[obj] then
+                        _G.originalWireframeProperties[obj] = {
+                            Transparency = obj.Transparency,
+                            Material = obj.Material,
+                            Color = obj.Color
+                        }
+                    end
+                    
+                    -- Make the actual part invisible
+                    obj.Transparency = 1
+                    
+                    -- Remove any existing SelectionBox to avoid duplicates
+                    local existingSB = obj:FindFirstChild("WireframeSelectionBox")
+                    if existingSB then
+                        existingSB:Destroy()
+                    end
+                    
+                    -- Create a SelectionBox to serve as the wireframe outline
+                    local selectionBox = Instance.new("SelectionBox")
+                    selectionBox.Name = "WireframeSelectionBox"
+                    selectionBox.Adornee = obj
+                    selectionBox.LineThickness = 0.05  -- Adjust for desired line weight
+                    -- Use the original part color (or change to a fixed color if preferred)
+                    selectionBox.Color3 = _G.originalWireframeProperties[obj].Color or Color3.new(1, 1, 1)
+                    selectionBox.Parent = obj
+                end
+            end
+            _G.isWireframeEnabled = true
+            print("Wireframe mode enabled")
+        end
+        
+        -- Disable wireframe: restore original properties and remove SelectionBoxes
+        local function disableWireframe()
+            for part, props in pairs(_G.originalWireframeProperties) do
+                if part and part.Parent then
+                    part.Transparency = props.Transparency
+                    part.Material = props.Material
+                    part.Color = props.Color
+                    local selectionBox = part:FindFirstChild("WireframeSelectionBox")
+                    if selectionBox then
+                        selectionBox:Destroy()
                     end
                 end
             end
+            -- Clear our stored properties
+            _G.originalWireframeProperties = {}
+            _G.isWireframeEnabled = false
+            print("Wireframe mode disabled")
         end
         
-        -- Listen for user input to toggle wireframe effect (e.g., pressing 'W' key)
-        UserInputService.InputBegan:Connect(function(input, gameProcessed)
-            if gameProcessed then return end
-        
-            if input.KeyCode == Enum.KeyCode.W then -- Change key as needed
-                toggleWireframe()
+        -- Toggle wireframe state
+        local function toggleWireframe()
+            if _G.isWireframeEnabled then
+                disableWireframe()
+            else
+                enableWireframe()
             end
-        end)
+        end
+        
+        toggleWireframe()
+        
         
     end,
  })
@@ -1234,58 +1337,80 @@ initializeESP()
     CurrentValue = false,
     Flag = "Toggle13", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
--- Fullbright Script
-
 -- Services
 local Lighting = game:GetService("Lighting")
 
+-- Use _G to persist state across script executions
+_G.isFullbrightEnabled = _G.isFullbrightEnabled or false
+_G.originalLightingProperties = _G.originalLightingProperties or {}
+
 -- Function to enable fullbright
-local function EnableFullbright()
+local function enableFullbright()
+    -- Store original lighting settings if not already stored
+    if not _G.originalLightingProperties.Ambient then
+        _G.originalLightingProperties = {
+            Ambient = Lighting.Ambient,
+            OutdoorAmbient = Lighting.OutdoorAmbient,
+            Brightness = Lighting.Brightness,
+            ShadowSoftness = Lighting.ShadowSoftness,
+            FogStart = Lighting.FogStart,
+            FogEnd = Lighting.FogEnd
+        }
+    end
+
+    -- Apply Fullbright settings
     Lighting.Ambient = Color3.fromRGB(255, 255, 255)  -- Full brightness
     Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)  -- Full brightness outside
     Lighting.Brightness = 2  -- Increase brightness level
     Lighting.ShadowSoftness = 0  -- No shadows
     Lighting.FogStart = 0  -- Disable fog
     Lighting.FogEnd = 100000  -- Extend fog range to make it invisible
+
+    _G.isFullbrightEnabled = true
+    print("Fullbright enabled")
 end
 
--- Call the function to enable fullbright
-EnableFullbright()
-
--- Optional: Set up a toggle keybind to turn it off and on
-local UserInputService = game:GetService("UserInputService")
-local isFullbright = true
-local toggleKey = Enum.KeyCode.F -- Change this key if desired
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == toggleKey then
-        isFullbright = not isFullbright
-        if isFullbright then
-            EnableFullbright()
-        else
-            -- Restore default lighting
-            Lighting.Ambient = Color3.fromRGB(127, 127, 127)  -- Default ambient light
-            Lighting.OutdoorAmbient = Color3.fromRGB(127, 127, 127)  -- Default outdoor ambient light
-            Lighting.Brightness = 1  -- Default brightness
-            Lighting.ShadowSoftness = 0.5  -- Default shadow softness
-            Lighting.FogStart = 0  -- Default fog start
-            Lighting.FogEnd = 100000  -- Default fog end
-        end
+-- Function to disable fullbright (restore original settings)
+local function disableFullbright()
+    if _G.originalLightingProperties.Ambient then
+        -- Restore original lighting properties
+        Lighting.Ambient = _G.originalLightingProperties.Ambient
+        Lighting.OutdoorAmbient = _G.originalLightingProperties.OutdoorAmbient
+        Lighting.Brightness = _G.originalLightingProperties.Brightness
+        Lighting.ShadowSoftness = _G.originalLightingProperties.ShadowSoftness
+        Lighting.FogStart = _G.originalLightingProperties.FogStart
+        Lighting.FogEnd = _G.originalLightingProperties.FogEnd
     end
-end)
+
+    -- Clear stored properties
+    _G.originalLightingProperties = {}
+    _G.isFullbrightEnabled = false
+    print("Fullbright disabled")
+end
+
+-- Toggle function
+local function toggleFullbright()
+    if _G.isFullbrightEnabled then
+        disableFullbright()
+    else
+        enableFullbright()
+    end
+end
+
+toggleFullbright() -- Run on script execution
+
 
     end,
  })
 
-playerfov = 60
+playerfov = 90
 
  local Slider = mis:CreateSlider({
     Name = "FOV",
     Range = {1, 300},
     Increment = 1,
     Suffix = "Degrees",
-    CurrentValue = 60,
+    CurrentValue = 90,
     Flag = "Slider5", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
 playerfov = Value 
@@ -1295,14 +1420,31 @@ playerfov = Value
  local Button = mis:CreateButton({
     Name = "Update Fov ",
     Callback = function()
--- Place this script inside StarterPlayerScripts
-
-local targetFOV = playerfov -- Set your desired FOV value here
-local camera = workspace.CurrentCamera
-
-game:GetService("RunService").RenderStepped:Connect(function()
-    camera.FieldOfView = targetFOV
-end)
+        local Players = game:GetService("Players")
+        local RunService = game:GetService("RunService")
+        
+        -- The FOV variable – change this value as needed, or update it via another script or GUI.
+        playerfov = 90
+        
+        -- Optionally, if you want to allow external scripts to change the FOV,
+        -- you could store it in a global variable, e.g., _G.FOV
+        
+        -- Get the current camera (assuming this script runs on the client)
+        local camera = workspace.CurrentCamera
+        
+        -- Constantly update the camera's FieldOfView every frame
+        RunService.RenderStepped:Connect(function()
+            if camera then
+                camera.FieldOfView = playerfov
+            end
+        end)
+        
+        -- Example: Change the FOV after 5 seconds (for testing)
+        delay(5, function()
+            playerfov = 120
+            print("FOV updated to 120")
+        end)
+        
 
     end,
  })
@@ -1331,93 +1473,164 @@ end)
     CurrentValue = false,
     Flag = "Toggle17", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
     Callback = function(Value)
-        local Players = game:GetService("Players")
-        local RunService = game:GetService("RunService")
-        
-        -- Configuration
-        local ApplyToSelf = false -- Set to true to apply effect to your own character
-        local ColorChangeEnabled = false -- Set to true to enable gradual color shifts
-        local ColorChangeInterval = 3 -- Time (seconds) between color changes
-        local DefaultColor = Color3.fromRGB(255, 0, 0) -- Bright Red
-        
-        -- Function to remove clothes
-        local function removeClothes(character)
-            for _, item in ipairs(character:GetChildren()) do
-                if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") or item:IsA("Accessory") then
-                    item:Destroy()
-                end
+-- Configuration (set these variables as desired before running the script)
+local selfchams = false         -- Set to true to apply the effect to your own character
+local rainbowchams = true       -- Set to true to enable gradual rainbow color shifts
+local rainbowspeed = 5          -- Time (in seconds) for one full rainbow cycle
+local chamscolor = Color3.fromRGB(255, 0, 0)  -- Default color (red)
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+-- Config assignments
+local ApplyToSelf = selfchams
+local ColorChangeEnabled = rainbowchams
+local ColorChangeInterval = rainbowspeed
+local DefaultColor = chamscolor
+
+-- Persistent globals for toggling and storing original properties
+_G.isChamsEnabled = _G.isChamsEnabled or false
+_G.chamsData = _G.chamsData or {}  -- Stores original Material and Color for each modified BasePart
+
+-----------------------------------------------------
+-- Helper Functions
+-----------------------------------------------------
+
+-- Remove neon/chams effects from a character (restore original material/color and remove highlight)
+local function removeChamsFromCharacter(character)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            if _G.chamsData[part] then
+                local orig = _G.chamsData[part]
+                part.Material = orig.Material
+                part.Color = orig.Color
+                _G.chamsData[part] = nil
+            end
+            local highlight = part:FindFirstChild("NeonHighlight")
+            if highlight then
+                highlight:Destroy()
             end
         end
-        
-        -- Function to apply neon effect
-        local function applyNeonEffect(character)
+    end
+end
+
+-- Function to remove clothes (this is destructive; they cannot be restored on toggle off)
+local function removeClothes(character)
+    for _, item in ipairs(character:GetChildren()) do
+        if item:IsA("Shirt") or item:IsA("Pants") or item:IsA("ShirtGraphic") or item:IsA("Accessory") then
+            item:Destroy()
+        end
+    end
+end
+
+-----------------------------------------------------
+-- Chams Application Functions
+-----------------------------------------------------
+
+-- Apply the neon chams effect to a character:
+local function applyChams(character)
+    removeClothes(character)
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+            if not _G.chamsData[part] then
+                _G.chamsData[part] = {
+                    Material = part.Material,
+                    Color = part.Color
+                }
+            end
+            part.Material = Enum.Material.Neon
+            part.Color = DefaultColor
+        end
+    end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "NeonHighlight"
+    highlight.Adornee = character
+    highlight.FillColor = DefaultColor
+    highlight.FillTransparency = 1  -- fully transparent fill so details remain visible
+    highlight.OutlineColor = DefaultColor
+    highlight.OutlineTransparency = 0  -- visible outline
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = character
+end
+
+-- Gradually update the chams to cycle through rainbow colors using HSV.
+local function updateRainbowChams(character, startTime)
+    if not ColorChangeEnabled then return end
+    task.spawn(function()
+        while character.Parent and _G.isChamsEnabled do
+            local elapsed = tick() - startTime
+            local hue = (elapsed / ColorChangeInterval) % 1
+            local newColor = Color3.fromHSV(hue, 1, 1)
             for _, part in ipairs(character:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.Material = Enum.Material.Neon
-                    part.Color = DefaultColor
+                if part:IsA("BasePart") and part.Material == Enum.Material.Neon then
+                    part.Color = newColor
                 end
             end
-        end
-        
-        -- Function to apply a highlight that renders on top of all other objects
-        local function applyHighlight(character)
-            local highlight = Instance.new("Highlight")
-            highlight.Name = "NeonHighlight"
-            highlight.Adornee = character
-            highlight.FillColor = DefaultColor
-            highlight.FillTransparency = 1  -- Set to fully transparent so details remain visible
-            highlight.OutlineColor = DefaultColor
-            highlight.OutlineTransparency = 0  -- Outline is visible
-            highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            highlight.Parent = character
-        end
-        
-        -- Function to shift colors over time (if enabled)
-        local function updateColors(character)
-            if not ColorChangeEnabled then return end
-            task.spawn(function()
-                while character.Parent do
-                    local newColor = Color3.fromRGB(math.random(200, 255), 0, 0) -- Varying shades of bright red
-                    for _, part in ipairs(character:GetDescendants()) do
-                        if part:IsA("BasePart") and part.Material == Enum.Material.Neon then
-                            part.Color = newColor
-                        end
-                    end
-                    local highlight = character:FindFirstChild("NeonHighlight")
-                    if highlight then
-                        highlight.FillColor = newColor
-                        highlight.OutlineColor = newColor
-                    end
-                    task.wait(ColorChangeInterval)
-                end
-            end)
-        end
-        
-        -- Function to handle new characters
-        local function onCharacterAdded(character, player)
-            if not ApplyToSelf and player == Players.LocalPlayer then return end
-            removeClothes(character)
-            applyNeonEffect(character)
-            applyHighlight(character) -- This ensures the character is highlighted on top
-            updateColors(character)
-        end
-        
-        -- Apply effect to all current players
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player.Character then
-                onCharacterAdded(player.Character, player)
+            local highlight = character:FindFirstChild("NeonHighlight")
+            if highlight then
+                highlight.FillColor = newColor
+                highlight.OutlineColor = newColor
             end
-            player.CharacterAdded:Connect(function(character)
-                onCharacterAdded(character, player)
-            end)
+            task.wait(0.03)
         end
-        
-        -- Apply effect to new players
-        Players.PlayerAdded:Connect(function(player)
-            player.CharacterAdded:Connect(function(character)
-                onCharacterAdded(character, player)
-            end)
+    end)
+end
+
+-----------------------------------------------------
+-- Character & Player Handling
+-----------------------------------------------------
+
+-- Function to handle when a new character spawns
+local function onCharacterAdded(character, player)
+    if not ApplyToSelf and player == Players.LocalPlayer then return end
+    applyChams(character)
+    if ColorChangeEnabled then
+        local startTime = tick()
+        updateRainbowChams(character, startTime)
+    end
+end
+
+-- Enable chams for all current and future players
+local function enableChams()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            onCharacterAdded(player.Character, player)
+        end
+        player.CharacterAdded:Connect(function(character)
+            onCharacterAdded(character, player)
         end)
+    end
+    _G.isChamsEnabled = true
+    print("Chams enabled")
+end
+
+-- Disable chams for all players (restore original properties and remove highlights)
+local function disableChams()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character then
+            removeChamsFromCharacter(player.Character)
+        end
+    end
+    _G.chamsData = {}
+    _G.isChamsEnabled = false
+    print("Chams disabled")
+end
+
+-----------------------------------------------------
+-- Toggle Function
+-----------------------------------------------------
+
+local function toggleChams()
+    if _G.isChamsEnabled then
+        disableChams()
+    else
+        enableChams()
+    end
+end
+
+toggleChams()
+
         
     end,
  })
@@ -1616,6 +1829,17 @@ local Slider = con:CreateSlider({
      end,
  })
 
+AIMVISIBILITYCHECK = false
+
+ local Toggle = con:CreateToggle({
+    Name = "Aimbot visibilty check",
+    CurrentValue = false,
+    Flag = "Toggle23", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+AIMVISIBILITYCHECK = Value
+    end,
+ })
+
  local Toggle = con:CreateToggle({
     Name = "Aimbot teamcheck",
     CurrentValue = true,
@@ -1639,6 +1863,31 @@ local ColorPicker = con:CreateColorPicker({
 })
 
 local Section = con:CreateSection("Snaplines config")
+
+RainbowSnaplineC = false
+
+local Toggle = con:CreateToggle({
+    Name = "Rainbow snaplines",
+    CurrentValue = false,
+    Flag = "Toggle21", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+RainbowSnaplineC = Value
+    end,
+ })
+
+SnaplineRainbowC = 3
+
+ local Slider = con:CreateSlider({
+    Name = "Snapline Rainbow speed",
+    Range = {0.2, 10},
+    Increment = 0.2,
+    Suffix = "Seconds",
+    CurrentValue = 3,
+    Flag = "Slider12", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+SnaplineRainbowC = Value
+    end,
+ })
 
 SnaplinesCconfig = Color3.new(0, 1, 0) -- Default red
 
@@ -1666,3 +1915,53 @@ HealthEspColorCon = Value
     end
 })
 
+local Section = con:CreateSection("Chams")
+
+chamscolor = Color3.fromRGB(255, 0, 0)
+
+local ColorPicker = con:CreateColorPicker({
+    Name = "Chams color",
+    Color = Color3.fromRGB(255, 0, 0),
+    Flag = "ColorPicker4", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+chamscolor = Value
+    end
+})
+
+rainbowchams = false
+
+local Toggle = con:CreateToggle({
+    Name = "Rainbow chams",
+    CurrentValue = false,
+    Flag = "Toggle19", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+rainbowchams = Value
+    end,
+ })
+
+rainbowspeed = 3
+
+ local Slider = con:CreateSlider({
+    Name = "Rainbow speed",
+    Range = {0.2, 10},
+    Increment = 0.2,
+    Suffix = "Seconds",
+    CurrentValue = 3,
+    Flag = "Slider12", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+rainbowspeed = Value
+    end,
+ })
+
+selfchams = false
+
+ local Toggle = con:CreateToggle({
+    Name = "Apply chams on self",
+    CurrentValue = false,
+    Flag = "Toggle20", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+selfchams = Value
+    end,
+ })
+
+ 
