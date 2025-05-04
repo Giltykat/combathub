@@ -1964,4 +1964,403 @@ selfchams = Value
     end,
  })
 
- 
+
+ local Section = con:CreateSection("Silent Aim")
+
+
+silent_aim_fov = 100
+silent_aim_checksight = true
+silent_aim_fov_enabled = true
+silent_aim_fov_color = Color3.fromRGB(255, 0, 0)
+
+local Slider = con:CreateSlider({
+    Name = "SilentAim Fov Circle radius",
+    Range = {5, 300},
+    Increment = 1,
+    Suffix = "degrees",
+    CurrentValue = 100,
+    Flag = "Slider20", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+        silent_aim_fov = Value
+    end,
+ })
+
+ local Toggle = con:CreateToggle({
+    Name = "Visible Check",
+    CurrentValue = false,
+    Flag = "Toggle31", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+silent_aim_checksight = Value
+    end,
+ })
+
+ local Toggle = con:CreateToggle({
+    Name = "Fov Enabled",
+    CurrentValue = false,
+    Flag = "Toggle32", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+silent_aim_fov_enabled = Value
+    end,
+ })
+
+ local ColorPicker = con:CreateColorPicker({
+    Name = "Fov Color",
+    Color = Color3.fromRGB(255,255,255),
+    Flag = "ColorPicker9", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+silent_aim_fov_color = Value
+    end
+})
+
+ local Toggle = aim:CreateToggle({
+    Name = "Silent Aim",
+    CurrentValue = false,
+    Flag = "Toggle30", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
+    Callback = function(Value)
+--[[
+Aim Script Modification for Roblox Game (Snap-on-Fire Aim Assist - NO HOOKING - OPTIMIZED + TOGGLE MODE + FOV + CROSSHAIR CHECK)
+
+Goal:
+- Toggleable Assist Mode for LMB Snap-on-Fire.
+- Optimized hitbox management.
+- NEW: Toggleable visual FOV circle.
+- NEW: Optional check requires crosshair to be near target (within FOV circle) to activate snap.
+
+Features:
+- Toggle Key (TOGGLE_MODE_KEY) -> isAssistModeActive
+- Fire Key (FIRE_KEY) + Assist Mode Active -> Snap Logic
+- Hitbox Caching & Dynamic Updates
+- FOV Circle GUI (ENABLE_FOV_CIRCLE, FOV_RADIUS)
+- Crosshair Trigger Check (ENABLE_CROSSHAIR_TRIGGER_CHECK, uses FOV_RADIUS)
+]]
+
+-- Services
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService") -- For inset calculation
+local CoreGui = game:GetService("CoreGui") -- For placing GUI
+
+-- Configuration
+local HITBOX_NAME = "HitboxHeadSmall"
+local FIRE_KEY = Enum.UserInputType.MouseButton1 -- Key to PRESS to trigger the snap+fire (when mode is active)
+local TOGGLE_MODE_KEY = Enum.KeyCode.RightControl -- Key to TOGGLE Assist Mode ON/OFF
+local ASSIST_MODE_ACTIVE_BY_DEFAULT = false     -- Should Assist Mode be active when the script loads?
+
+local MAX_DISTANCE_3D = 300 -- Max 3D distance to find targets
+local CHECK_LINE_OF_SIGHT = silent_aim_checksight -- Recommended: Only aim if target is visible
+
+-- NEW: FOV Circle & Crosshair Check Config
+local ENABLE_FOV_CIRCLE = silent_aim_fov_enabled           -- Show the visual FOV circle?
+local FOV_RADIUS = silent_aim_fov                   -- Radius of the circle in screen pixels. Also used for Crosshair Check.
+local FOV_CIRCLE_COLOR = silent_aim_fov_color -- Red
+local FOV_CIRCLE_THICKNESS = 1           -- Thickness of the circle line
+local FOV_CIRCLE_SIDES = 32              -- How many segments for the circle frame (higher = smoother)
+local ENABLE_CROSSHAIR_TRIGGER_CHECK = true -- Require crosshair within FOV radius of target to snap?
+
+-- State
+local LocalPlayer = Players.LocalPlayer
+local Camera = Workspace.CurrentCamera
+local hitboxes = {}              -- Dictionary Set: { [hitboxInstance] = true }
+local isAssistModeActive = ASSIST_MODE_ACTIVE_BY_DEFAULT
+local isSnapping = false
+local originalCameraCFrame = nil
+
+-- GUI State
+local fovGui = nil
+local fovCircleFrame = nil
+
+-- Connections Holder
+local connections = {}
+
+-- Debug print helper
+local function debugPrint(...)
+    print("[SnapAim Full Debug]:", ...)
+end
+
+-- === GUI Management ===
+
+local function destroyFovGui()
+    if fovGui then
+        pcall(function() fovGui:Destroy() end)
+        fovGui = nil
+        fovCircleFrame = nil
+        debugPrint("FOV GUI destroyed.")
+    end
+end
+
+local function createOrUpdateFovGui()
+    if not ENABLE_FOV_CIRCLE then
+        destroyFovGui()
+        return
+    end
+
+    if not fovGui or not fovGui.Parent then
+        destroyFovGui() -- Clean up any remnants
+
+        fovGui = Instance.new("ScreenGui")
+        fovGui.Name = "FovCircleGui_" .. tostring(math.random(1, 10000))
+        fovGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- Or Global if needed over other CoreGuis
+        fovGui.DisplayOrder = 1000 -- High display order to be on top
+        fovGui.ResetOnSpawn = false
+        fovGui.IgnoreGuiInset = true -- Cover entire screen space
+
+        fovCircleFrame = Instance.new("Frame")
+        fovCircleFrame.Name = "FovCircle"
+        fovCircleFrame.AnchorPoint = Vector2.new(0.5, 0.5) -- Center anchor
+        fovCircleFrame.Position = UDim2.fromScale(0.5, 0.5) -- Center position
+        fovCircleFrame.Size = UDim2.fromOffset(FOV_RADIUS * 2, FOV_RADIUS * 2) -- Diameter
+        fovCircleFrame.BackgroundTransparency = 1 -- Make frame background invisible
+
+        local uiCorner = Instance.new("UICorner")
+        uiCorner.CornerRadius = UDim.new(1, 0) -- Make it a perfect circle
+        uiCorner.Parent = fovCircleFrame
+
+        local uiStroke = Instance.new("UIStroke")
+        uiStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+        uiStroke.Color = FOV_CIRCLE_COLOR
+        uiStroke.Thickness = FOV_CIRCLE_THICKNESS
+        uiStroke.LineJoinMode = Enum.LineJoinMode.Round -- Smoother look
+        uiStroke.Parent = fovCircleFrame
+
+        fovCircleFrame.Parent = fovGui
+        fovGui.Parent = CoreGui -- Place in CoreGui for better reliability in exploits
+
+        debugPrint("FOV GUI created.")
+    end
+
+    -- Update visibility based on assist mode
+    fovGui.Enabled = isAssistModeActive
+
+    -- Ensure properties are up-to-date (useful if config changes dynamically later)
+    if fovCircleFrame then
+        fovCircleFrame.Size = UDim2.fromOffset(FOV_RADIUS * 2, FOV_RADIUS * 2)
+        local uiStroke = fovCircleFrame:FindFirstChildOfClass("UIStroke")
+        if uiStroke then
+            uiStroke.Color = FOV_CIRCLE_COLOR
+            uiStroke.Thickness = FOV_CIRCLE_THICKNESS
+        end
+    end
+end
+
+
+-- === Target Management Functions (Mostly Unchanged, added helper) ===
+
+local function isAlive(character)
+    if not character then return false end
+    local humanoid = character:FindFirstChildOfClass("Humanoid")
+    return humanoid and humanoid.Health > 0
+end
+
+local function addHitbox(hitbox)
+    if hitbox and hitbox:IsA("BasePart") and hitbox.Name == HITBOX_NAME then
+        local char = hitbox:FindFirstAncestorOfClass("Model")
+        if char and char ~= LocalPlayer.Character and isAlive(char) then
+             if not hitboxes[hitbox] then hitboxes[hitbox] = true; return true end
+        end
+    end return false
+end
+
+local function removeHitbox(hitbox)
+     if hitboxes[hitbox] then hitboxes[hitbox] = nil; return true end
+     return false
+end
+
+local function onCharacterAdded(character)
+    if not character then return end; task.wait(0.5)
+    if not character or not character.Parent then return end
+    local headHitbox = character:FindFirstChild(HITBOX_NAME, true)
+    if headHitbox and addHitbox(headHitbox) then
+         local ancestryConn, deathConn
+         ancestryConn = headHitbox.AncestryChanged:Connect(function(_, parent) if not parent or not headHitbox:IsDescendantOf(Workspace) then removeHitbox(headHitbox); if ancestryConn then pcall(ancestryConn.Disconnect, ancestryConn) end; if deathConn then pcall(deathConn.Disconnect, deathConn) end end end)
+         local humanoid = character:FindFirstChildOfClass("Humanoid")
+         if humanoid then deathConn = humanoid.Died:Connect(function() removeHitbox(headHitbox); if deathConn then pcall(deathConn.Disconnect, deathConn) end; if ancestryConn then pcall(ancestryConn.Disconnect, ancestryConn) end end) end
+    end
+end
+
+local function onCharacterRemoving(character) if not character then return end; for hitboxInstance, _ in pairs(hitboxes) do if hitboxInstance:IsDescendantOf(character) then removeHitbox(hitboxInstance) end end end
+local function initialCache() debugPrint("Performing initial hitbox cache..."); hitboxes = {}; local c = 0; local l = LocalPlayer.Character; for _, o in ipairs(Workspace:GetDescendants()) do if o.Name == HITBOX_NAME and o:IsA("BasePart") then local ch = o:FindFirstAncestorOfClass("Model"); if ch and ch ~= l and isAlive(ch) then if addHitbox(o) then c = c + 1 end end end end; debugPrint("Initial cache complete. Found:", c, "hitboxes.") end
+local function setupDynamicHandlers() for _, p in ipairs(Players:GetPlayers()) do if p ~= LocalPlayer then if p.Character then onCharacterAdded(p.Character) end; table.insert(connections, p.CharacterAdded:Connect(onCharacterAdded)); table.insert(connections, p.CharacterRemoving:Connect(onCharacterRemoving)) end end; table.insert(connections, Players.PlayerAdded:Connect(function(p) table.insert(connections, p.CharacterAdded:Connect(onCharacterAdded)); table.insert(connections, p.CharacterRemoving:Connect(onCharacterRemoving)) end)); table.insert(connections, Players.PlayerRemoving:Connect(function(p) if p.Character then onCharacterRemoving(p.Character) end end)); table.insert(connections, Workspace.DescendantAdded:Connect(function(d) if d.Name == HITBOX_NAME and d:IsA("BasePart") then task.delay(0.1, function() if d and d.Parent then addHitbox(d) end end) end end)); table.insert(connections, Workspace.DescendantRemoving:Connect(function(d) if d.Name == HITBOX_NAME and d:IsA("BasePart") then removeHitbox(d) end end)); debugPrint("Dynamic hitbox handlers setup.") end
+
+initialCache()
+setupDynamicHandlers()
+
+-- === Target Finding Functions (Added screen position check) ===
+
+-- Helper to check if a 3D point is within the FOV circle on screen
+local function isPointInFovCircle(point3D)
+    if not Camera then return false end
+    local screenPos, onScreen = Camera:WorldToScreenPoint(point3D)
+    if not onScreen then return false end -- Target behind camera or too far
+
+    local mousePos = UserInputService:GetMouseLocation() -- Using actual mouse pos as center reference
+    -- Adjust mouse pos for GuiInset if not IgnoreGuiInset
+    -- local guiInset = GuiService:GetGuiInset()
+    -- local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2) -- Alternative center
+
+    local distFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+    return distFromCenter <= FOV_RADIUS
+end
+
+local function checkLineOfSightOptimized(targetPart, cameraPos)
+    local localChar = LocalPlayer.Character; if not localChar or not targetPart.Parent then return false end
+    local targetPos = targetPart.Position; local direction = (targetPos - cameraPos).Unit
+    local origin = cameraPos + direction * 0.1; local distance = (targetPos - origin).Magnitude
+    if distance < 0.1 then return true end
+    local params = RaycastParams.new(); params.FilterType = Enum.RaycastFilterType.Exclude
+    local filterList = {localChar}; local targetChar = targetPart:FindFirstAncestorOfClass("Model")
+    if targetChar then table.insert(filterList, targetChar) end
+    params.FilterDescendantsInstances = filterList; params.IgnoreWater = true
+    return not Workspace:Raycast(origin, direction * distance, params)
+end
+
+local function findClosestTargetOptimized()
+    local bestTarget = nil
+    local minDist3D = MAX_DISTANCE_3D -- Check 3D distance
+    local closestScreenDist = FOV_RADIUS -- Check screen distance relative to mouse
+
+    local cameraPos = Camera and Camera.CFrame.Position
+    local mousePos = UserInputService:GetMouseLocation()
+    if not cameraPos then return nil end
+
+    for hitboxInstance, _ in pairs(hitboxes) do
+        if hitboxInstance and hitboxInstance.Parent then
+            local targetPos3D = hitboxInstance.Position
+            local dist3D = (targetPos3D - cameraPos).Magnitude
+
+            -- Check 3D Distance First
+            if dist3D <= minDist3D and dist3D > 0.1 then
+                -- Check if On Screen and within FOV Radius
+                 local screenPos, onScreen = Camera:WorldToScreenPoint(targetPos3D)
+                 if onScreen then
+                     local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                     if screenDist <= closestScreenDist then
+                         -- Check Line of Sight (most expensive, do last)
+                         if CHECK_LINE_OF_SIGHT then
+                            if checkLineOfSightOptimized(hitboxInstance, cameraPos) then
+                                -- Found a potentially better target
+                                bestTarget = hitboxInstance
+                                closestScreenDist = screenDist -- Prioritize target closest to crosshair within FOV
+                                -- We could also use minDist3D here if preferred priority is 3D distance
+                            end
+                         else
+                             -- No LoS check needed, update best target
+                             bestTarget = hitboxInstance
+                             closestScreenDist = screenDist
+                         end
+                     end
+                 end
+            end
+        else
+            removeHitbox(hitboxInstance) -- Housekeeping
+        end
+    end
+    return bestTarget
+end
+
+
+-- === Input Handling (Added Crosshair Trigger Check) ===
+
+UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
+    if gameProcessedEvent then return end
+
+    if input.KeyCode == TOGGLE_MODE_KEY then
+        isAssistModeActive = not isAssistModeActive
+        debugPrint("Assist Mode Toggled:", isAssistModeActive and "ACTIVE" or "INACTIVE")
+        createOrUpdateFovGui() -- Update GUI visibility
+        if not isAssistModeActive then isSnapping = false; originalCameraCFrame = nil end
+        return
+    end
+
+    if not isAssistModeActive then return end
+
+    if input.UserInputType == FIRE_KEY then
+        debugPrint("Fire key pressed while Assist Mode is ACTIVE.")
+        local targetToSnap = findClosestTargetOptimized()
+
+        if targetToSnap and Camera then
+             local proceedWithSnap = true -- Assume true initially
+
+             -- ** NEW: Crosshair Trigger Check **
+            if ENABLE_CROSSHAIR_TRIGGER_CHECK then
+                local targetScreenPos, onScreen = Camera:WorldToScreenPoint(targetToSnap.Position)
+                 local mousePos = UserInputService:GetMouseLocation()
+                 if onScreen then
+                     local dist = (Vector2.new(targetScreenPos.X, targetScreenPos.Y) - mousePos).Magnitude
+                    if dist > FOV_RADIUS then
+                        debugPrint("Snap cancelled: Crosshair too far from target (Dist: " .. string.format("%.1f", dist) .. ")")
+                        proceedWithSnap = false
+                    end
+                 else
+                     debugPrint("Snap cancelled: Target not on screen (somehow passed initial check?).")
+                    proceedWithSnap = false -- Should not happen if findClosest handled it, but safe check
+                 end
+            end
+
+            -- Proceed if check passed or is disabled
+            if proceedWithSnap then
+                debugPrint(string.format("Snapping aim to %s", targetToSnap:GetFullName()))
+                isSnapping = true
+                originalCameraCFrame = Camera.CFrame
+                Camera.CFrame = CFrame.new(originalCameraCFrame.Position, targetToSnap.Position)
+
+                task.spawn(function()
+                    RunService.RenderStepped:Wait()
+                    if isSnapping and isAssistModeActive and originalCameraCFrame and Camera then
+                        Camera.CFrame = originalCameraCFrame
+                    end
+                    isSnapping = false
+                    originalCameraCFrame = nil
+                end)
+            end
+        else
+            debugPrint("Fire key pressed, but no valid/visible target found within FOV/LoS.")
+        end
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessedEvent)
+    -- No specific actions needed on key release in this setup
+end)
+
+-- === Heartbeat / RenderStepped Loop (GUI Update) ===
+table.insert(connections, RunService.RenderStepped:Connect(function(dt)
+    -- Update FOV Circle Visibility/State if necessary
+    if ENABLE_FOV_CIRCLE and fovGui then
+        if fovGui.Enabled ~= isAssistModeActive then
+            fovGui.Enabled = isAssistModeActive
+            -- debugPrint("FOV GUI visibility updated:", isAssistModeActive) -- Optional: reduce spam
+        end
+    end
+
+    -- Reset snapping state if mode is toggled off during the snap cycle
+    if not isAssistModeActive and isSnapping then
+        isSnapping = false
+        originalCameraCFrame = nil
+    end
+end))
+
+-- === Cleanup Function ===
+local function cleanup()
+    debugPrint("Cleaning up SnapAim script...")
+    destroyFovGui() -- Destroy GUI elements
+    for _, connection in ipairs(connections) do
+        pcall(connection.Disconnect, connection)
+    end
+    connections = {}
+    hitboxes = {}
+    debugPrint("Cleanup complete.")
+end
+-- Connect cleanup if possible: -- script.Destroying:Connect(cleanup)
+
+-- Initial Status Message & GUI Setup
+debugPrint("Optimized Snap-on-Fire Aim Assist script loaded.")
+debugPrint("Assist Mode Status:", isAssistModeActive and "ACTIVE" or "INACTIVE")
+debugPrint("Press [" .. TOGGLE_MODE_KEY.Name .. "] to toggle Assist Mode.")
+debugPrint("FOV Circle:", ENABLE_FOV_CIRCLE and "Enabled" or "Disabled", "(Radius: " .. FOV_RADIUS .. ")")
+debugPrint("Crosshair Trigger Check:", ENABLE_CROSSHAIR_TRIGGER_CHECK and "Enabled" or "Disabled")
+debugPrint("When Assist Mode is ACTIVE, press [" .. FIRE_KEY.Name .. "] to fire with snap assist.")
+createOrUpdateFovGui() -- Create the GUI initially based on default state
+    end,
+ })
